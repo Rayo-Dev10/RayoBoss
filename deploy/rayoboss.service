@@ -1,0 +1,32 @@
+# /etc/systemd/system/rayoboss.service
+[Unit]
+Description=RayoBoss 4 - UNIOC Radio
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/rayoboss
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/rayoboss.env
+ExecStart=/usr/bin/node /opt/rayoboss/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+KillSignal=SIGTERM
+UMask=0077
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/rayoboss/data /opt/rayoboss/logs /opt/rayoboss/backups
+
+[Install]
+WantedBy=multi-user.target

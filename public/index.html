@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RayoBoss | UNIOC Radio</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header>
+  <div class="marca">Rayo<b>Boss</b> <span class="sans marca-sub">| UNIOC Radio</span></div>
+  <div class="estado"><span id="punto" class="punto"></span><span id="estadoTxt">AutoDJ</span></div>
+</header>
+<nav id="nav" class="oculto" aria-label="Navegacion principal">
+  <button data-t="panel" class="on">Inicio</button>
+  <button data-t="admin">Administrativo</button>
+  <button data-t="vivo">En vivo</button>
+  <button data-t="media">Biblioteca</button>
+  <button data-t="program">Programación</button>
+  <button data-t="player">Reproductor público</button>
+  <button data-t="diag">Diagnostico</button>
+  <button id="btnSalir" class="salir">Salir</button>
+</nav>
+<main>
+<section id="t-login">
+  <div class="card login-card">
+    <h2>Ingreso institucional</h2>
+    <p class="sub">Emisora universitaria UNIOC - acceso por roles</p>
+    <label for="lu">Usuario</label><input id="lu" autocomplete="username" maxlength="64">
+    <label for="lp">Contraseña</label><input id="lp" type="password" autocomplete="current-password" maxlength="256">
+    <button class="btn" id="btnLogin">Ingresar</button>
+    <button class="btn linea" id="btnEscuchar">Escuchar sin cuenta</button>
+    <div id="lmsg" class="msg" aria-live="polite"></div>
+    <hr>
+    <h2 class="h2-small">Solicitud de invitado</h2>
+    <p class="sub">El sistema reservara tu usuario y lo dejara listo en el campo de ingreso. Si hay un programa en vivo, tambien enviara la solicitud inicial de microfono.</p>
+    <label for="gn">Nombre</label><input id="gn" maxlength="60" autocomplete="given-name">
+    <label for="ga">Apellido</label><input id="ga" maxlength="60" autocomplete="family-name">
+    <button class="btn naranja" id="btnInvitado">Solicitar acceso</button>
+    <div id="gmsg" class="msg" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="t-panel" class="oculto">
+  <div class="aire">
+    <div class="ondas quieto" id="ondas" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+    <div>
+      <div class="aire-fuente" id="fuente">AutoDJ</div>
+      <div class="aire-titulo" id="titulo">-</div>
+      <div class="aire-detalle" id="detalle"></div>
+    </div>
+  </div>
+  <div class="card"><h2>Bienvenido, <span id="quien"></span></h2>
+    <p class="sub">Rol: <span id="rol"></span>. La navegacion muestra solo las funciones autorizadas.</p>
+  </div>
+</section>
+
+<section id="t-admin" class="oculto">
+  <div class="card">
+    <h2>Usuarios</h2>
+    <p class="sub">La contraseña debe tener al menos 12 caracteres. El usuario <code>dev</code> esta protegido.</p>
+    <label for="nu">Usuario</label><input id="nu" maxlength="32">
+    <label for="np">Contraseña</label><input id="np" type="password" maxlength="256">
+    <label for="nr">Rol</label>
+    <select id="nr"><option>administrador</option><option>locutor</option><option>periodista</option><option>invitado</option><option>solo_lectura</option><option value="desarrollador">desarrollador</option></select>
+    <button class="btn" id="btnCrearUsuario">Crear usuario</button>
+    <div id="umsg" class="msg" aria-live="polite"></div>
+    <div class="table-scroll"><table id="tu"><thead><tr><th>Usuario</th><th>Rol</th><th>Accion</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Solicitudes de invitados</h2>
+    <p class="sub">El usuario queda reservado desde la solicitud. Al aprobar se genera una contraseña temporal que se muestra una sola vez.</p>
+    <div id="credmsg" class="msg" aria-live="polite"></div>
+    <div class="table-scroll"><table id="tg"><thead><tr><th>Nombre</th><th>Usuario</th><th>Estado</th><th>Accion</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Solicitudes de microfono</h2>
+    <p class="sub">Primero puede habilitarse una prueba privada. La aprobacion al aire puede concederse directamente sin pasar por la prueba.</p>
+    <div id="micadminmsg" class="msg" aria-live="polite"></div>
+    <div class="table-scroll"><table id="tm"><thead><tr><th>Participante</th><th>Rol</th><th>Estado</th><th>Prueba</th><th>Acciones</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Cambiar mi contraseña</h2>
+    <label for="cp">Nueva contraseña</label><input id="cp" type="password" maxlength="256">
+    <button class="btn" id="btnClave">Actualizar</button>
+    <div id="cmsg" class="msg" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="t-vivo" class="oculto">
+  <div class="card" id="hostCard">
+    <h2>Consola de emision</h2>
+    <p class="sub">Al iniciar, el navegador solicita el microfono del conductor y crea el estudio WebRTC. El celular u otro oyente debe pulsar Escuchar vivo para recibir la señal.</p>
+    <label for="vt">Titulo del programa</label><input id="vt" maxlength="120" placeholder="En vivo desde el campus">
+    <button class="btn rojo" id="btnVivo">Iniciar vivo</button>
+    <button class="btn linea oculto" id="btnFinVivo">Terminar vivo y regresar a AutoDJ</button>
+    <button class="btn oculto" id="btnStudio">Activar o reconectar estudio</button>
+    <div id="vmsg" class="msg" aria-live="polite"></div>
+  </div>
+  <div class="card oculto" id="studioCard">
+    <h2>Estudio WebRTC</h2>
+    <p class="sub">Mezcla el microfono del conductor con los invitados aprobados y lo entrega directamente a los oyentes. Para redes restrictivas se recomienda configurar TURN.</p>
+    <div class="stats-grid">
+      <div><b id="studioListeners">0</b><span>oyentes WebRTC</span></div>
+      <div><b id="studioParticipants">0</b><span>microfonos remotos</span></div>
+      <div><b id="studioState">inactivo</b><span>estado del estudio</span></div>
+    </div>
+    <div class="studio-grid">
+      <div>
+        <h3>Fuente de video</h3>
+        <button class="btn linea" id="btnCamera">Usar cámara</button>
+        <button class="btn linea" id="btnScreen">Compartir pantalla o ventana</button>
+        <button class="btn linea" id="btnNoVideo">Retirar video</button>
+        <video id="studioPreview" class="studio-preview oculto" muted playsinline autoplay></video>
+      </div>
+      <div>
+        <h3>Cama musical y ducking</h3>
+        <select id="bedSelect"></select>
+        <button class="btn linea" id="btnBed">Activar cama</button>
+        <label for="bedVolume">Volumen sin voz</label><input id="bedVolume" type="range" min="0" max="1" step="0.05" value="0.55">
+        <p class="sub">El ducking reduce automáticamente la cama cuando detecta voz en el conductor o en participantes.</p>
+      </div>
+    </div>
+    <h3>Efectos al aire</h3>
+    <div id="soundboard" class="soundboard"></div>
+    <button class="btn linea" id="btnStopStudio">Desconectar estudio local</button>
+    <div id="studiomsg" class="msg" aria-live="polite"></div>
+  </div>
+  <div class="card oculto" id="participantCard">
+    <h2>Participacion con microfono</h2>
+    <p class="sub">Disponible para periodistas e invitados solamente durante un programa en vivo.</p>
+    <button class="btn naranja" id="btnRequestMic">Solicitar microfono</button>
+    <button class="btn oculto" id="btnTestMic">Realizar prueba autorizada</button>
+    <button class="btn rojo oculto" id="btnJoinMic">Conectar microfono al vivo</button>
+    <button class="btn linea oculto" id="btnLeaveMic">Desconectar microfono</button>
+    <video id="participantVideo" controls autoplay playsinline class="video-player oculto"></video>
+    <audio id="participantAudio" controls autoplay class="audio-player oculto"></audio>
+    <div id="participantmsg" class="msg" aria-live="polite"></div>
+  </div>
+  <div class="card" id="localMicCard">
+    <h2>Comprobacion local</h2>
+    <p class="sub">Comprueba que el navegador reconoce el dispositivo. Esta prueba por si sola no pone el microfono al aire.</p>
+    <button class="btn" id="btnMic">Probar microfono local</button>
+    <div id="micmsg" class="msg" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="t-player" class="oculto">
+  <div class="card">
+    <h2>Reproductor público</h2>
+    <iframe id="publicFrame" src="/embed?autoplay=0" allow="autoplay; fullscreen" class="public-frame" title="Señal pública UNIOC Radio"></iframe>
+    <div id="autoPlayer">
+      <p class="sub">AutoDJ utiliza la señal WAV de continuidad. En Vercel cada conexion se renueva al alcanzar el tiempo configurado.</p>
+      <audio id="au" controls preload="none" class="audio-player" src="/api/public/audio"></audio>
+      <button class="btn linea" id="btnStream">Abrir stream directo</button>
+    </div>
+    <div id="rtcPlayer" class="oculto">
+      <p class="sub">Pulsa el boton desde el celular para autorizar la reproduccion. La señal en vivo llega directamente desde el estudio del conductor mediante WebRTC.</p>
+      <button class="btn rojo" id="btnListenLive">Escuchar transmision en vivo</button>
+      <button class="btn linea oculto" id="btnStopListen">Desconectar vivo</button>
+      <video id="liveVideo" controls autoplay playsinline class="video-player oculto"></video>
+      <audio id="liveAudio" controls autoplay class="audio-player oculto"></audio>
+      <div id="rtcmsg" class="msg" aria-live="polite"></div>
+    </div>
+    <hr>
+    <h2 class="h2-small">Endpoint e integración</h2>
+    <p class="sub">Para páginas estáticas usa el reproductor embebible. El navegador intentará reproducir automáticamente, pero puede exigir una pulsación para audio audible.</p>
+    <label for="embedUrl">URL pública</label><input id="embedUrl" readonly>
+    <label for="embedCode">Código iframe</label><textarea id="embedCode" rows="4" readonly></textarea>
+    <button class="btn linea" id="btnCopyEmbed">Copiar código</button>
+    <p class="sub player-meta">Ahora suena: <b id="ptitulo">-</b> · Oyentes conectados a la señal WAV: <b id="poyentes">0</b></p>
+    <div id="amsg" class="msg" aria-live="polite"></div>
+  </div>
+</section>
+
+
+<section id="t-media" class="oculto">
+  <div class="card">
+    <h2>Biblioteca multimedia</h2>
+    <p class="sub">Audio y video para AutoDJ y producción en vivo. “Producción y continuidad” reúne identificadores, cuñas, cortinillas y promos. El material temporal del vivo caduca en máximo 24 horas.</p>
+    <div class="form-grid">
+      <div><label for="mediaFile">Archivo</label><input id="mediaFile" type="file" accept="audio/*,video/*"></div>
+      <div><label for="mediaTitle">Título</label><input id="mediaTitle" maxlength="160"></div>
+      <div><label for="mediaCategory">Categoría</label><select id="mediaCategory"></select></div>
+      <div><label for="mediaSubtype">Tipo de producción</label><select id="mediaSubtype"><option value="">No aplica</option><option value="identificador">Identificador</option><option value="cuna">Cuña</option><option value="cortinilla">Cortinilla</option><option value="promo">Promo</option></select></div>
+      <div><label for="mediaDuration">Duración aproximada (segundos)</label><input id="mediaDuration" type="number" min="0.1" step="0.1" value="30"></div>
+      <div><label for="rightsBasis">Base de derechos/licencia</label><input id="rightsBasis" maxlength="240" placeholder="Creative Commons, autorización, producción propia…"></div>
+      <div><label for="rightsReference">Referencia o soporte</label><input id="rightsReference" maxlength="240"></div>
+      <div><label class="check"><input id="rightsConfirmed" type="checkbox"> Derechos confirmados para emisión</label></div>
+    </div>
+    <button class="btn" id="btnUploadMedia">Cargar archivo</button>
+    <progress id="uploadProgress" max="100" value="0" class="oculto"></progress>
+    <div id="mediamsg" class="msg" aria-live="polite"></div>
+  </div>
+  <div class="card"><h2>Contenido disponible</h2><div class="table-scroll"><table id="mediaTable"><thead><tr><th>Título</th><th>Categoría</th><th>Formato</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody></tbody></table></div></div>
+</section>
+
+<section id="t-program" class="oculto">
+  <div class="card program-header">
+    <div>
+      <h2>Programación visual del AutoDJ</h2>
+      <p class="sub">Organiza contenidos y franjas sin editar código ni JSON. Los cambios solo salen al aire después de pulsar <b>Guardar programación</b>.</p>
+    </div>
+    <div class="program-actions">
+      <button class="btn" id="btnProgramSave">Guardar programación</button>
+      <button class="btn linea" id="btnProgramReload">Descartar cambios</button>
+      <button class="btn linea" id="btnProgramExport">Exportar respaldo</button>
+      <label class="btn linea file-button" for="programImportFile">Importar respaldo</label>
+      <input id="programImportFile" type="file" accept="application/json,.json" class="visually-hidden">
+      <button class="btn linea danger-outline" id="btnProgramReset">Restablecer demostración</button>
+    </div>
+    <div id="programmsg" class="msg" aria-live="polite"></div>
+  </div>
+
+  <div class="program-tabs" role="tablist" aria-label="Módulos de programación">
+    <button class="program-tab on" data-program-tab="playlists" role="tab">1. Playlists</button>
+    <button class="program-tab" data-program-tab="schedule" role="tab">2. Franjas horarias</button>
+    <button class="program-tab" data-program-tab="continuity" role="tab">3. Continuidad</button>
+    <button class="program-tab" data-program-tab="summary" role="tab">4. Resumen al aire</button>
+  </div>
+
+  <div id="programTabPlaylists" class="program-panel">
+    <div class="card">
+      <div class="section-heading-row">
+        <div><h2>Playlists</h2><p class="sub">Crea listas, selecciona contenidos de la biblioteca y define el orden de reproducción.</p></div>
+        <button class="btn" id="btnPlaylistAdd">Nueva playlist</button>
+      </div>
+      <div class="program-two-columns">
+        <aside>
+          <div id="playlistList" class="playlist-list" aria-label="Playlists disponibles"></div>
+        </aside>
+        <div id="playlistEditor" class="playlist-editor">
+          <p class="empty-state">Selecciona o crea una playlist.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="programTabSchedule" class="program-panel oculto">
+    <div class="card">
+      <div class="section-heading-row">
+        <div><h2>Franjas semanales</h2><p class="sub">Cada franja define días, hora de inicio, hora de cierre y playlist. No se permiten franjas superpuestas.</p></div>
+        <button class="btn" id="btnSlotAdd">Nueva franja</button>
+      </div>
+      <div id="scheduleList" class="schedule-list"></div>
+    </div>
+  </div>
+
+  <div id="programTabContinuity" class="program-panel oculto">
+    <div class="card">
+      <h2>Continuidad profesional</h2>
+      <p class="sub">Configura identificadores, cuñas, transición y la playlist que se usa cuando ninguna franja coincide.</p>
+      <div class="form-grid continuity-grid">
+        <div><label for="continuityFallback">Playlist de respaldo</label><select id="continuityFallback"></select></div>
+        <div><label for="continuityCrossfade">Transición entre piezas (segundos)</label><input id="continuityCrossfade" type="number" min="0" max="10" step="0.1"></div>
+        <div><label for="continuityIdEvery">Emitir identificador cada</label><div class="input-with-suffix"><input id="continuityIdEvery" type="number" min="0" max="50" step="1"><span>pistas</span></div></div>
+        <div><label for="continuityCueEvery">Emitir cuña cada</label><div class="input-with-suffix"><input id="continuityCueEvery" type="number" min="0" max="240" step="1"><span>minutos</span></div></div>
+        <div><label for="continuityCueOrder">Orden de cuñas</label><select id="continuityCueOrder"><option value="sequential">Secuencial</option><option value="random">Aleatorio</option></select></div>
+      </div>
+      <div class="program-two-columns continuity-assets">
+        <div><h3>Identificadores disponibles</h3><div id="continuityStationIds" class="check-list"></div></div>
+        <div><h3>Cuñas disponibles</h3><div id="continuityCues" class="check-list"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="programTabSummary" class="program-panel oculto">
+    <div class="card now-playing-card">
+      <div class="now-badge" id="programModeBadge">AutoDJ</div>
+      <div class="now-main">
+        <span class="now-kicker">Ahora programado</span>
+        <h2 id="programNowTitle">Cargando…</h2>
+        <p id="programNowMeta" class="sub"></p>
+        <progress id="programNowProgress" max="100" value="0"></progress>
+        <p id="programNowTime" class="now-time"></p>
+      </div>
+    </div>
+    <div class="summary-grid">
+      <div class="card summary-card"><span>Siguiente</span><b id="programNextTitle">-</b><small id="programNextMeta">-</small></div>
+      <div class="card summary-card"><span>Playlist activa</span><b id="programPlaylistName">-</b><small id="programPlaylistMode">-</small></div>
+      <div class="card summary-card"><span>Franja activa</span><b id="programSlotName">-</b><small id="programSlotTime">-</small></div>
+      <div class="card summary-card"><span>Continuidad</span><b id="programContinuitySummary">-</b><small id="programCrossfadeSummary">-</small></div>
+    </div>
+    <div class="card">
+      <div class="section-heading-row"><div><h2>Agenda semanal</h2><p class="sub">Vista humana de las franjas que están habilitadas.</p></div><button class="btn linea" id="btnProgramRefreshNow">Actualizar ahora</button></div>
+      <div class="table-scroll"><table><thead><tr><th>Franja</th><th>Días</th><th>Horario</th><th>Playlist</th><th>Estado</th></tr></thead><tbody id="programScheduleSummary"></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="t-diag" class="oculto">
+  <div class="card">
+    <h2>Diagnostico del sistema</h2>
+    <pre id="diag" class="diag">Cargando...</pre>
+    <button class="btn linea" id="btnDiag">Actualizar</button>
+  </div>
+</section>
+</main>
+<footer>RayoBoss 4.0.0 - Emisora institucional UNIOC · IES CINOC</footer>
+<script src="/js/blob-client.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/studio-v4.js"></script>
+<script src="/js/programming-v4.js"></script>
+</body>
+</html>
