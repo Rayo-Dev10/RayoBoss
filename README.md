@@ -28,7 +28,7 @@ npm start
 
 Abrir `http://localhost:3000` e ingresar con el usuario `dev` y la contraseña mostrada por el script.
 
-No se debe ejecutar `rm -rf data` para corregir el inicio de sesión. RayoBoss sincroniza automáticamente `dev` con `RAYOBOSS_DEV_PASSWORD` y las pruebas usan un directorio temporal aislado.
+RayoBoss sincroniza automáticamente `dev` con `RAYOBOSS_DEV_PASSWORD` y las pruebas usan un directorio temporal aislado.
 
 ## Comprobación
 
