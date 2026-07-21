@@ -1,0 +1,33 @@
+{
+  "name": "rayoboss",
+  "version": "4.0.1",
+  "description": "Plataforma radial multimedia con AutoDJ visual, estudio WebRTC, biblioteca audiovisual y despliegue en Vercel o VPS",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node scripts/build-client.js",
+    "test": "node tests/test.js",
+    "verify": "npm run build && npm run check:imports && npm test && npm run doctor && npm run check:release && npm run smoke:vercel",
+    "doctor": "node scripts/doctor.js",
+    "reset-dev-password": "node scripts/reset-dev-password.js",
+    "clean:workspace": "bash scripts/clean-workspace.sh --apply",
+    "check:imports": "node scripts/check-relative-imports.js",
+    "check:release": "node scripts/check-release.js",
+    "smoke:vercel": "node scripts/smoke-vercel-bundle.js",
+    "verify:full": "npm run verify && npm audit --omit=dev",
+    "check:git": "node scripts/check-git-index.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "packageManager": "npm@10.9.2",
+  "dependencies": {
+    "@vercel/blob": "2.6.1",
+    "@vercel/functions": "^3.7.5",
+    "esbuild": "^0.25.0",
+    "express": "^4.22.2",
+    "multer": "^2.0.2"
+  },
+  "license": "MIT"
+}
