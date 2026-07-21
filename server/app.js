@@ -21,11 +21,15 @@ app.use('/api', require('./routes/microphones'));
 app.use('/api', require('./routes/rtc'));
 app.use('/api', require('./routes/media'));
 app.use('/api', require('./routes/programming'));
+app.use('/api', require('./routes/reports'));
 app.use('/api', require('./routes/public'));
 if (!cfg.isVercel && cfg.dataDir) {
   app.use(cfg.storage.localPublicPath, express.static(cfg.storage.localRootDir, { maxAge: '1h', fallthrough: false }));
 }
-app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'], maxAge: cfg.isProduction ? '1h' : 0 }));
+const publicDir = path.join(__dirname, '..', 'public');
+const modulePaths = ['/inicio', '/administrativo', '/en-vivo', '/biblioteca', '/programacion', '/reproductor', '/informes', '/diagnostico'];
+app.get(modulePaths, (req, res) => res.sendFile(path.join(publicDir, 'index.html')));
+app.use(express.static(publicDir, { extensions: ['html'], maxAge: cfg.isProduction ? '1h' : 0 }));
 app.use('/api', (req, res) => res.status(404).json({ error: 'Ruta no encontrada.' }));
 app.use((err, req, res, next) => {
   const status = Number.isInteger(err.status) ? err.status : 500;

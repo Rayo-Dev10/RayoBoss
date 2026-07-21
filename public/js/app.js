@@ -3,6 +3,11 @@ let currentUser = null;
 let currentLive = null;
 let myMicrophoneRequest = null;
 let adminRefreshAt = 0;
+const SECTION_PATHS = Object.freeze({
+  panel: '/inicio', admin: '/administrativo', vivo: '/en-vivo', media: '/biblioteca',
+  program: '/programacion', reports: '/informes', player: '/reproductor', diag: '/diagnostico'
+});
+const PATH_SECTIONS = Object.fromEntries(Object.entries(SECTION_PATHS).map(([section, pathname]) => [pathname, section]));
 
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -40,13 +45,25 @@ function clearMessage(id) {
   element.className = 'msg';
 }
 function visible(id, show) { $(id).classList.toggle('oculto', !show); }
-function show(section) {
-  ['login', 'panel', 'admin', 'vivo', 'media', 'program', 'player', 'diag'].forEach(name => {
-    $(`t-${name}`).classList.toggle('oculto', name !== section);
+function sectionFromLocation() { return PATH_SECTIONS[location.pathname] || 'panel'; }
+function sectionAllowed(section) {
+  if (section === 'admin' || section === 'media') return roleIs('desarrollador', 'administrador');
+  if (section === 'program' || section === 'reports') return roleIs('desarrollador', 'administrador', 'locutor');
+  if (section === 'vivo') return roleIs('desarrollador', 'administrador', 'locutor', 'periodista', 'invitado');
+  return true;
+}
+function show(section, options = {}) {
+  const target = currentUser && sectionAllowed(section) ? section : (currentUser ? 'panel' : section);
+  ['login', 'panel', 'admin', 'vivo', 'media', 'program', 'reports', 'player', 'diag'].forEach(name => {
+    $(`t-${name}`).classList.toggle('oculto', name !== target);
   });
   document.querySelectorAll('nav button[data-t]').forEach(button => {
-    button.classList.toggle('on', button.dataset.t === section);
+    button.classList.toggle('on', button.dataset.t === target);
   });
+  const pathname = SECTION_PATHS[target];
+  if (currentUser && target !== section && pathname) history.replaceState({ section: target }, '', pathname);
+  if (pathname && currentUser && location.pathname !== pathname && !options.fromHistory) history.pushState({ section: target }, '', pathname);
+  document.dispatchEvent(new CustomEvent('rayoboss:section', { detail: { section: target } }));
 }
 function cell(text) {
   const td = document.createElement('td');
@@ -105,6 +122,13 @@ $('btnLeaveMic').addEventListener('click', stopParticipantRtc);
 $('btnListenLive').addEventListener('click', startListenerRtc);
 $('btnStopListen').addEventListener('click', stopListenerRtc);
 $('btnDiag').addEventListener('click', loadDiagnostics);
+$('btnLoadPublicPlayer').addEventListener('click', () => {
+  const frame = $('publicFrame');
+  if (!frame.getAttribute('src')) frame.setAttribute('src', frame.dataset.src);
+  visible('publicFrame', true);
+  $('btnLoadPublicPlayer').textContent = 'Reproductor de oyentes cargado';
+  $('btnLoadPublicPlayer').disabled = true;
+});
 $('btnStream').addEventListener('click', () => { location.href = '/api/public/audio'; });
 $('au').addEventListener('ended', () => message('amsg', 'La sesion de AutoDJ termino. Pulsa reproducir para reconectar.', false));
 $('au').addEventListener('play', () => clearMessage('amsg'));
@@ -131,12 +155,13 @@ function enter() {
   document.querySelector('[data-t=vivo]').style.display = liveArea ? '' : 'none';
   document.querySelector('[data-t=media]').style.display = admin ? '' : 'none';
   document.querySelector('[data-t=program]').style.display = roleIs('desarrollador', 'administrador', 'locutor') ? '' : 'none';
+  document.querySelector('[data-t=reports]').style.display = roleIs('desarrollador', 'administrador', 'locutor') ? '' : 'none';
   const developerOption = $('nr').querySelector('option[value="desarrollador"]');
   developerOption.hidden = currentUser.role !== 'desarrollador';
   developerOption.disabled = currentUser.role !== 'desarrollador';
   visible('hostCard', roleIs('desarrollador', 'administrador', 'locutor'));
   visible('participantCard', roleIs('periodista', 'invitado'));
-  show('panel');
+  show(sectionFromLocation(), { fromHistory: true });
   if (admin) loadAdminData();
   refresh();
 }
@@ -814,6 +839,9 @@ window.addEventListener('beforeunload', () => {
       connectionId: participantRtc.session.connectionId, token: participantRtc.session.token
     })], { type: 'application/json' }));
   }
+});
+window.addEventListener('popstate', () => {
+  if (currentUser) show(sectionFromLocation(), { fromHistory: true });
 });
 
 setInterval(refresh, 4000);

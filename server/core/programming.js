@@ -295,7 +295,9 @@ async function now(date = new Date()) {
   if (!timeline.length || total <= 0) {
     return { item: null, next: null, playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: 0, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds };
   }
-  let cursor = Math.floor(date.getTime() / 1000) % total;
+  const epochSeconds = Math.floor(date.getTime() / 1000);
+  const cycle = Math.floor(epochSeconds / total);
+  let cursor = epochSeconds % total;
   for (let index = 0; index < timeline.length; index++) {
     const duration = timeline[index].durationSeconds || 30;
     if (cursor < duration) {
@@ -307,12 +309,14 @@ async function now(date = new Date()) {
         offsetSeconds: cursor,
         remainingSeconds: Math.max(0, duration - cursor),
         progressPercent: Math.min(100, Math.max(0, (cursor / duration) * 100)),
-        crossfadeSeconds: state.continuity.crossfadeSeconds
+        crossfadeSeconds: state.continuity.crossfadeSeconds,
+        startedAt: new Date((epochSeconds - cursor) * 1000).toISOString(),
+        playoutKey: `autodj:${state.revision || 0}:${playlist.id}:${cycle}:${index}`
       };
     }
     cursor -= duration;
   }
-  return { item: timeline[0], next: timeline[1] || timeline[0], playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: timeline[0].durationSeconds || 30, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds };
+  return { item: timeline[0], next: timeline[1] || timeline[0], playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: timeline[0].durationSeconds || 30, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds, startedAt: date.toISOString(), playoutKey: `autodj:${state.revision || 0}:${playlist.id}:${cycle}:0` };
 }
 
 async function get() { return clone(await load({ fresh: cfg.isVercel })); }

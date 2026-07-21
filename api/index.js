@@ -1870,13 +1870,26 @@ var require_media_library = __commonJS({
     var CATALOG_KEY = "media-catalog-v302";
     var CATALOG_FILE = cfg.dataDir ? path.join(cfg.dataDir, "media-catalog.json") : null;
     var CATEGORIES = Object.freeze({
-      "autodj.libre": { label: "M\xFAsica libre y no restrictiva", scope: "autodj", persistent: true },
-      "autodj.sayco": { label: "SAYCO-ACINPRO", scope: "autodj", persistent: true, rightsRequired: true },
-      "autodj.produccion": { label: "Producci\xF3n y continuidad", scope: "autodj", persistent: true },
-      "live.volatil": { label: "Material temporal del vivo (24 horas)", scope: "live", persistent: false, maxHours: 24 },
-      "live.efectos": { label: "Efectos de sonido", scope: "live", persistent: true },
-      "live.camas": { label: "Camas y fondos musicales", scope: "live", persistent: true }
+      "autodj.libre": { label: "M\xFAsica libre y no restrictiva", scope: "autodj", persistent: true, mediaType: "music" },
+      "autodj.sayco": { label: "SAYCO-ACINPRO", scope: "autodj", persistent: true, rightsRequired: true, mediaType: "music" },
+      "autodj.produccion": { label: "Producci\xF3n y continuidad", scope: "autodj", persistent: true, mediaType: "production" },
+      "live.volatil": { label: "Material temporal del vivo (24 horas)", scope: "live", persistent: false, maxHours: 24, mediaType: "other" },
+      "live.efectos": { label: "Efectos de sonido", scope: "live", persistent: true, mediaType: "effect" },
+      "live.camas": { label: "Camas y fondos musicales", scope: "live", persistent: true, mediaType: "bed" }
     });
+    var LICENSE_TYPES = Object.freeze({
+      "licencia-libre": "Licencia libre o de stock",
+      "creative-commons": "Creative Commons",
+      "dominio-publico": "Dominio p\xFAblico",
+      "produccion-propia": "Producci\xF3n propia",
+      "sayco-acinpro": "SAYCO-ACINPRO",
+      "autorizacion-directa": "Autorizaci\xF3n directa",
+      otra: "Otra licencia",
+      pendiente: "Pendiente de clasificar"
+    });
+    var MEDIA_EXTENSIONS = /* @__PURE__ */ new Set([".mp3", ".wav", ".aac", ".m4a", ".ogg", ".oga", ".flac", ".opus", ".mp4", ".m4v", ".webm", ".mov"]);
+    var LICENSE_EXTENSIONS = /* @__PURE__ */ new Set([".txt", ".pdf", ".jpg", ".jpeg", ".png", ".webp"]);
+    var LICENSE_CONTENT_TYPES = /* @__PURE__ */ new Set(["text/plain", "application/pdf", "image/jpeg", "image/png", "image/webp"]);
     var localCatalog = null;
     var queue = Promise.resolve();
     function nowIso() {
@@ -1885,27 +1898,73 @@ var require_media_library = __commonJS({
     function id() {
       return crypto.randomBytes(12).toString("hex");
     }
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+    function optionalText(value, max = 240) {
+      const safe = String(value || "").trim();
+      if (safe.length > max || /[<>]/.test(safe)) badRequest("Uno de los metadatos contiene caracteres o una longitud no permitidos.");
+      return safe;
+    }
+    function requiredText(value, name, max = 160) {
+      const safe = optionalText(value, max);
+      if (!safe) badRequest(`${name} inv\xE1lido.`);
+      return safe;
+    }
+    function inferredLicenseType(category) {
+      if (category === "autodj.sayco") return "sayco-acinpro";
+      if (category === "autodj.produccion") return "produccion-propia";
+      if (category === "autodj.libre") return "licencia-libre";
+      return "pendiente";
+    }
     function seed() {
       return {
-        schemaVersion: 1,
+        schemaVersion: 2,
         revision: 1,
         items: [
-          { id: "demo-indie", title: "Pieza independiente de demostraci\xF3n", category: "autodj.libre", kind: "audio", contentType: "audio/mpeg", url: "/media/indie-demo.mp3", durationSeconds: 18, active: true, bundled: true, rights: { basis: "Generaci\xF3n sint\xE9tica propia para prueba", reference: "RayoBoss 4.0.1" }, createdAt: nowIso() },
-          { id: "demo-graduacion", title: "Ceremonia de graduaci\xF3n \u2014 video de prueba", category: "autodj.libre", kind: "video", contentType: "video/mp4", url: "/media/graduacion-demo.mp4", durationSeconds: 12, active: true, bundled: true, rights: { basis: "Video y audio sint\xE9ticos propios", reference: "RayoBoss 4.0.1" }, createdAt: nowIso() },
-          { id: "demo-id", title: "Identificador RayoBoss de prueba", category: "autodj.produccion", subtype: "identificador", kind: "audio", contentType: "audio/mpeg", url: "/media/identificador-demo.mp3", durationSeconds: 1, active: true, bundled: true, createdAt: nowIso() },
-          { id: "demo-cuna", title: "Cu\xF1a institucional de prueba", category: "autodj.produccion", subtype: "cuna", kind: "audio", contentType: "audio/mpeg", url: "/media/cuna-demo.mp3", durationSeconds: 2.4, active: true, bundled: true, createdAt: nowIso() },
-          { id: "demo-bed", title: "Cama musical de estudio", category: "live.camas", kind: "audio", contentType: "audio/mpeg", url: "/media/cama-demo.mp3", durationSeconds: 20, active: true, bundled: true, createdAt: nowIso() },
-          { id: "demo-laugh", title: "Efecto: reacci\xF3n positiva", category: "live.efectos", kind: "audio", contentType: "audio/mpeg", url: "/media/efecto-risa-demo.mp3", durationSeconds: 0.6, active: true, bundled: true, createdAt: nowIso() },
-          { id: "demo-suspense", title: "Efecto: suspenso", category: "live.efectos", kind: "audio", contentType: "audio/mpeg", url: "/media/efecto-suspenso-demo.mp3", durationSeconds: 2.5, active: true, bundled: true, createdAt: nowIso() }
+          { id: "demo-indie", title: "Pieza independiente de demostraci\xF3n", artist: "RayoBoss", category: "autodj.libre", mediaType: "music", kind: "audio", contentType: "audio/mpeg", url: "/media/indie-demo.mp3", durationSeconds: 18, active: true, bundled: true, rights: { licenseType: "produccion-propia", basis: "Generaci\xF3n sint\xE9tica propia para prueba", reference: "RayoBoss 4.0.1", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-graduacion", title: "Ceremonia de graduaci\xF3n \u2014 video de prueba", artist: "RayoBoss", category: "autodj.libre", mediaType: "music", kind: "video", contentType: "video/mp4", url: "/media/graduacion-demo.mp4", durationSeconds: 12, active: true, bundled: true, rights: { licenseType: "produccion-propia", basis: "Video y audio sint\xE9ticos propios", reference: "RayoBoss 4.0.1", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-id", title: "Identificador RayoBoss de prueba", artist: "RayoBoss", category: "autodj.produccion", mediaType: "production", subtype: "identificador", kind: "audio", contentType: "audio/mpeg", url: "/media/identificador-demo.mp3", durationSeconds: 1, active: true, bundled: true, rights: { licenseType: "produccion-propia", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-cuna", title: "Cu\xF1a institucional de prueba", artist: "RayoBoss", category: "autodj.produccion", mediaType: "production", subtype: "cuna", kind: "audio", contentType: "audio/mpeg", url: "/media/cuna-demo.mp3", durationSeconds: 2.4, active: true, bundled: true, rights: { licenseType: "produccion-propia", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-bed", title: "Cama musical de estudio", artist: "RayoBoss", category: "live.camas", mediaType: "bed", kind: "audio", contentType: "audio/mpeg", url: "/media/cama-demo.mp3", durationSeconds: 20, active: true, bundled: true, rights: { licenseType: "produccion-propia", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-laugh", title: "Efecto: reacci\xF3n positiva", artist: "RayoBoss", category: "live.efectos", mediaType: "effect", kind: "audio", contentType: "audio/mpeg", url: "/media/efecto-risa-demo.mp3", durationSeconds: 0.6, active: true, bundled: true, rights: { licenseType: "produccion-propia", confirmed: true }, createdAt: nowIso() },
+          { id: "demo-suspense", title: "Efecto: suspenso", artist: "RayoBoss", category: "live.efectos", mediaType: "effect", kind: "audio", contentType: "audio/mpeg", url: "/media/efecto-suspenso-demo.mp3", durationSeconds: 2.5, active: true, bundled: true, rights: { licenseType: "produccion-propia", confirmed: true }, createdAt: nowIso() }
         ]
       };
     }
-    function clone(value) {
-      return JSON.parse(JSON.stringify(value));
+    function migrateCatalog(input) {
+      if (!input || !Array.isArray(input.items)) return seed();
+      const catalog = clone(input);
+      catalog.schemaVersion = 2;
+      catalog.items = catalog.items.map((item) => {
+        const rights = item.rights && typeof item.rights === "object" ? item.rights : {};
+        return {
+          ...item,
+          artist: String(item.artist || ""),
+          album: String(item.album || ""),
+          genre: String(item.genre || ""),
+          year: String(item.year || ""),
+          isrc: String(item.isrc || ""),
+          composer: String(item.composer || ""),
+          performer: String(item.performer || ""),
+          recordLabel: String(item.recordLabel || ""),
+          notes: String(item.notes || ""),
+          mediaType: item.mediaType || CATEGORIES[item.category]?.mediaType || "other",
+          rights: {
+            ...rights,
+            licenseType: LICENSE_TYPES[rights.licenseType] ? rights.licenseType : inferredLicenseType(item.category),
+            basis: String(rights.basis || ""),
+            reference: String(rights.reference || ""),
+            confirmed: Boolean(rights.confirmed)
+          }
+        };
+      });
+      return catalog;
     }
     function publicItem(item) {
       const copy = clone(item);
       delete copy.localPath;
+      if (copy.rights?.document) delete copy.rights.document.localPath;
       return copy;
     }
     function cleanExpired(catalog) {
@@ -1915,7 +1974,7 @@ var require_media_library = __commonJS({
       return before !== catalog.items.length;
     }
     function validateCatalog(catalog) {
-      if (!catalog || catalog.schemaVersion !== 1 || !Array.isArray(catalog.items)) throw new Error("Cat\xE1logo multimedia inv\xE1lido.");
+      if (!catalog || catalog.schemaVersion !== 2 || !Array.isArray(catalog.items)) throw new Error("Cat\xE1logo multimedia inv\xE1lido.");
       for (const item of catalog.items) {
         if (!item || typeof item.id !== "string" || !CATEGORIES[item.category] || !["audio", "video"].includes(item.kind)) throw new Error("El cat\xE1logo contiene un elemento inv\xE1lido.");
       }
@@ -1933,6 +1992,9 @@ var require_media_library = __commonJS({
       if (!catalog) {
         catalog = seed();
         await persist(catalog);
+      } else if (catalog.schemaVersion !== 2) {
+        catalog = migrateCatalog(catalog);
+        await persist(catalog);
       }
       validateCatalog(catalog);
       if (cleanExpired(catalog)) await persist(catalog);
@@ -1940,55 +2002,82 @@ var require_media_library = __commonJS({
       return catalog;
     }
     function mutate(fn) {
-      const run = queue.then(async () => {
+      const execute = async () => {
         const catalog = await load({ fresh: cfg.isVercel });
         const result = await fn(catalog);
         await persist(catalog);
         localCatalog = catalog;
         return result;
-      }, async () => {
-        const catalog = await load({ fresh: cfg.isVercel });
-        const result = await fn(catalog);
-        await persist(catalog);
-        localCatalog = catalog;
-        return result;
-      });
+      };
+      const run = queue.then(execute, execute);
       queue = run.catch(() => {
       });
       return run;
     }
-    function text(value, name, max = 160) {
-      const safe = String(value || "").trim();
-      if (!safe || safe.length > max || /[<>]/.test(safe)) badRequest(`${name} inv\xE1lido.`);
-      return safe;
+    function validateMediaDescriptor({ originalName, contentType }) {
+      const extension = path.extname(String(originalName || "")).toLowerCase();
+      const mime = String(contentType || "").toLowerCase().split(";")[0];
+      if (!MEDIA_EXTENSIONS.has(extension)) badRequest("Formato multimedia no admitido. Usa MP3, WAV, AAC, M4A, OGG, FLAC, OPUS, MP4, MOV o WebM.");
+      if (mime && !/^(audio|video)\//.test(mime)) badRequest("El archivo seleccionado no se identifica como audio o video.");
+      const kind = mime.startsWith("video/") || [".mp4", ".m4v", ".webm", ".mov"].includes(extension) ? "video" : "audio";
+      return { extension, contentType: mime || (kind === "video" ? "video/mp4" : "audio/mpeg"), kind };
+    }
+    function validateLicenseDescriptor({ originalName, contentType, sizeBytes }) {
+      const extension = path.extname(String(originalName || "")).toLowerCase();
+      const mime = String(contentType || "").toLowerCase().split(";")[0];
+      if (!LICENSE_EXTENSIONS.has(extension) || mime && !LICENSE_CONTENT_TYPES.has(mime)) {
+        badRequest("El soporte de licencia debe ser TXT, PDF, JPG, PNG o WebP.");
+      }
+      if (Number(sizeBytes) > 25 * 1024 * 1024) badRequest("El soporte de licencia no puede superar 25 MB.");
+      return { extension, contentType: mime || (extension === ".pdf" ? "application/pdf" : "text/plain") };
     }
     function normalizeMetadata(input, actor) {
       const category = String(input.category || "");
       const categoryInfo = CATEGORIES[category];
       if (!categoryInfo) badRequest("Categor\xEDa multimedia inv\xE1lida.");
-      const contentType = String(input.contentType || "").toLowerCase();
+      const contentType = String(input.contentType || "").toLowerCase().split(";")[0];
       if (!/^(audio|video)\//.test(contentType)) badRequest("Solo se permiten archivos de audio o video.");
       const kind = contentType.startsWith("video/") ? "video" : "audio";
       const rightsConfirmed = input.rightsConfirmed === true || input.rightsConfirmed === "true";
       if (categoryInfo.rightsRequired && !rightsConfirmed) forbidden("Confirma que la emisora cuenta con autorizaci\xF3n SAYCO-ACINPRO antes de incorporar la obra.");
       const durationSeconds = Number(input.durationSeconds);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 86400) {
+        badRequest("No fue posible validar la duraci\xF3n del archivo multimedia.");
+      }
+      const licenseType = String(input.licenseType || inferredLicenseType(category));
+      if (!LICENSE_TYPES[licenseType]) badRequest("Tipo de licencia inv\xE1lido.");
+      const year = optionalText(input.year, 4);
+      if (year && !/^\d{4}$/.test(year)) badRequest("El a\xF1o debe tener cuatro d\xEDgitos.");
+      const isrc = optionalText(input.isrc, 20).toUpperCase();
+      if (isrc && !/^[A-Z0-9-]{5,20}$/.test(isrc)) badRequest("El c\xF3digo ISRC no tiene un formato v\xE1lido.");
       const createdAt = nowIso();
       return {
         id: id(),
-        title: text(input.title, "T\xEDtulo"),
+        title: requiredText(input.title, "T\xEDtulo"),
+        artist: optionalText(input.artist, 160),
+        album: optionalText(input.album, 160),
+        genre: optionalText(input.genre, 80),
+        year,
+        isrc,
+        composer: optionalText(input.composer, 160),
+        performer: optionalText(input.performer, 160),
+        recordLabel: optionalText(input.recordLabel, 160),
+        notes: optionalText(input.notes, 500),
         category,
-        subtype: String(input.subtype || "").trim().slice(0, 40) || null,
+        mediaType: categoryInfo.mediaType,
+        subtype: optionalText(input.subtype, 40) || null,
         kind,
         contentType,
-        durationSeconds: Number.isFinite(durationSeconds) && durationSeconds > 0 ? Math.min(durationSeconds, 86400) : 30,
-        active: true,
+        durationSeconds: Math.round(durationSeconds * 1e3) / 1e3,
+        active: input.active == null ? true : Boolean(input.active),
         bundled: false,
         uploadedBy: actor.username,
         createdAt,
         rights: {
           confirmed: rightsConfirmed,
-          basis: String(input.rightsBasis || "").trim().slice(0, 240),
-          reference: String(input.rightsReference || "").trim().slice(0, 240)
+          licenseType,
+          basis: optionalText(input.rightsBasis, 240),
+          reference: optionalText(input.rightsReference, 240)
         },
         expiresAt: categoryInfo.maxHours ? new Date(Date.now() + categoryInfo.maxHours * 36e5).toISOString() : null
       };
@@ -2003,27 +2092,92 @@ var require_media_library = __commonJS({
       if (!item) notFound("Elemento multimedia no encontrado.");
       return clone(item);
     }
-    function addUploaded(actor, input, storage) {
+    function documentFromStorage(storage) {
+      if (!storage) return null;
+      return { ...storage, attachedAt: nowIso() };
+    }
+    function addUploaded(actor, input, storage, licenseStorage = null) {
       return mutate(async (catalog) => {
-        const item = { ...normalizeMetadata(input, actor), ...storage };
+        const duplicate = storage.storageKey && catalog.items.find((item2) => item2.storageKey === storage.storageKey);
+        if (duplicate) return publicItem(duplicate);
+        const normalized = normalizeMetadata(input, actor);
+        if (licenseStorage) normalized.rights.document = documentFromStorage(licenseStorage);
+        const item = { ...normalized, ...storage };
         catalog.items.push(item);
         return publicItem(item);
+      });
+    }
+    function replaceUploaded(actor, itemId, input, storage, licenseStorage = null) {
+      return mutate(async (catalog) => {
+        const index = catalog.items.findIndex((entry) => entry.id === itemId);
+        if (index < 0) notFound("Elemento multimedia no encontrado.");
+        const previous = clone(catalog.items[index]);
+        if (previous.bundled) forbidden("Los recursos incluidos de demostraci\xF3n no pueden reemplazarse.");
+        if (previous.storageKey && previous.storageKey === storage.storageKey) {
+          return { item: publicItem(previous), previous: null };
+        }
+        if (storage.storageKey && catalog.items.some((entry) => entry.id !== itemId && entry.storageKey === storage.storageKey)) {
+          badRequest("Ese archivo ya pertenece a otra ficha de la biblioteca.");
+        }
+        const normalized = normalizeMetadata(input, actor);
+        normalized.rights.document = licenseStorage ? documentFromStorage(licenseStorage) : previous.rights?.document;
+        const item = {
+          ...normalized,
+          ...storage,
+          id: previous.id,
+          createdAt: previous.createdAt,
+          uploadedBy: previous.uploadedBy,
+          updatedAt: nowIso(),
+          updatedBy: actor.username,
+          replacedAt: nowIso(),
+          replacedBy: actor.username
+        };
+        catalog.items[index] = item;
+        return { item: publicItem(item), previous };
       });
     }
     function update(actor, itemId, input) {
       return mutate(async (catalog) => {
         const item = catalog.items.find((entry) => entry.id === itemId);
         if (!item) notFound("Elemento multimedia no encontrado.");
-        if (input.title != null) item.title = text(input.title, "T\xEDtulo");
-        if (input.active != null) item.active = Boolean(input.active);
-        if (input.durationSeconds != null) {
-          const seconds = Number(input.durationSeconds);
-          if (!Number.isFinite(seconds) || seconds <= 0) badRequest("Duraci\xF3n inv\xE1lida.");
-          item.durationSeconds = Math.min(seconds, 86400);
+        const merged = {
+          ...item,
+          ...input,
+          rightsConfirmed: input.rightsConfirmed == null ? item.rights?.confirmed : input.rightsConfirmed,
+          licenseType: input.licenseType == null ? item.rights?.licenseType : input.licenseType,
+          rightsBasis: input.rightsBasis == null ? item.rights?.basis : input.rightsBasis,
+          rightsReference: input.rightsReference == null ? item.rights?.reference : input.rightsReference
+        };
+        const normalized = normalizeMetadata(merged, actor);
+        for (const field of ["title", "artist", "album", "genre", "year", "isrc", "composer", "performer", "recordLabel", "notes", "category", "mediaType", "subtype", "durationSeconds", "expiresAt"]) {
+          item[field] = normalized[field];
         }
+        item.rights = { ...normalized.rights, document: item.rights?.document };
+        if (input.active != null) item.active = Boolean(input.active);
         item.updatedAt = nowIso();
         item.updatedBy = actor.username;
         return publicItem(item);
+      });
+    }
+    function attachLicense(actor, itemId, storage, input = {}) {
+      return mutate(async (catalog) => {
+        const item = catalog.items.find((entry) => entry.id === itemId);
+        if (!item) notFound("Elemento multimedia no encontrado.");
+        const previous = item.rights?.document ? clone(item.rights.document) : null;
+        const licenseType = String(input.licenseType || item.rights?.licenseType || inferredLicenseType(item.category));
+        if (!LICENSE_TYPES[licenseType]) badRequest("Tipo de licencia inv\xE1lido.");
+        item.rights = {
+          ...item.rights || {},
+          licenseType,
+          basis: input.rightsBasis == null ? String(item.rights?.basis || "") : optionalText(input.rightsBasis, 240),
+          reference: input.rightsReference == null ? String(item.rights?.reference || "") : optionalText(input.rightsReference, 240),
+          confirmed: input.rightsConfirmed == null ? Boolean(item.rights?.confirmed) : input.rightsConfirmed === true || input.rightsConfirmed === "true",
+          document: documentFromStorage(storage)
+        };
+        if (CATEGORIES[item.category].rightsRequired && !item.rights.confirmed) forbidden("Confirma la autorizaci\xF3n SAYCO-ACINPRO antes de adjuntar el soporte.");
+        item.updatedAt = nowIso();
+        item.updatedBy = actor.username;
+        return { item: publicItem(item), previous };
       });
     }
     function remove(actor, itemId) {
@@ -2039,10 +2193,27 @@ var require_media_library = __commonJS({
     function categories() {
       return clone(CATEGORIES);
     }
-    module2.exports = { list, get, addUploaded, update, remove, categories, normalizeMetadata, _resetForTests: () => {
-      localCatalog = null;
-      queue = Promise.resolve();
-    } };
+    function licenseTypes() {
+      return clone(LICENSE_TYPES);
+    }
+    module2.exports = {
+      list,
+      get,
+      addUploaded,
+      replaceUploaded,
+      update,
+      attachLicense,
+      remove,
+      categories,
+      licenseTypes,
+      normalizeMetadata,
+      validateMediaDescriptor,
+      validateLicenseDescriptor,
+      _resetForTests: () => {
+        localCatalog = null;
+        queue = Promise.resolve();
+      }
+    };
   }
 });
 
@@ -2286,9 +2457,8 @@ var require_local_disk_storage_provider = __commonJS({
 // server/core/storage/vercel-blob-storage-provider.js
 var require_vercel_blob_storage_provider = __commonJS({
   "server/core/storage/vercel-blob-storage-provider.js"(exports2, module2) {
-    var path = require("path");
     var StorageProvider = require_storage_provider();
-    var { assertSafeStorageKey, keyMatchesCategory } = require_storage_keys();
+    var { assertSafeStorageKey } = require_storage_keys();
     var { badRequest } = require_errors();
     var VercelBlobStorageProvider = class extends StorageProvider {
       constructor({ token }) {
@@ -2327,14 +2497,20 @@ var require_vercel_blob_storage_provider = __commonJS({
       }
       async listObjects(prefix = "rayoboss/") {
         const { list } = await import("@vercel/blob");
-        const result = await list({ prefix, token: this.token });
-        return result.blobs.map((blob) => ({
-          key: blob.pathname,
-          url: blob.url,
-          size: blob.size,
-          uploadedAt: blob.uploadedAt,
-          provider: this.id
-        }));
+        const output = [];
+        let cursor;
+        do {
+          const result = await list({ prefix, cursor, limit: 1e3, token: this.token });
+          output.push(...result.blobs.map((blob) => ({
+            key: blob.pathname,
+            url: blob.url,
+            size: blob.size,
+            uploadedAt: blob.uploadedAt,
+            provider: this.id
+          })));
+          cursor = result.hasMore ? result.cursor : void 0;
+        } while (cursor && output.length < 1e4);
+        return output;
       }
       async deleteObject(itemOrKey) {
         const target = typeof itemOrKey === "string" ? itemOrKey : itemOrKey?.url || itemOrKey?.storageKey || itemOrKey?.pathname;
@@ -2364,7 +2540,7 @@ var require_vercel_blob_storage_provider = __commonJS({
           provider: this.id
         };
       }
-      async handleDirectUpload({ req, body, getActor, normalizeMetadata, onCompleted, maxUploadBytes }) {
+      async handleDirectUpload({ req, body, getActor, authorizeUpload }) {
         const { handleUpload } = await import("@vercel/blob/client");
         return handleUpload({
           body,
@@ -2372,39 +2548,21 @@ var require_vercel_blob_storage_provider = __commonJS({
           token: this.token,
           onBeforeGenerateToken: async (pathname, clientPayload) => {
             const actor = await getActor(req);
-            let metadata;
+            let payload;
             try {
-              metadata = JSON.parse(clientPayload || "{}");
+              payload = JSON.parse(clientPayload || "{}");
             } catch (_) {
               badRequest("Metadatos de carga inv\xE1lidos.");
             }
             const storageKey = assertSafeStorageKey(pathname);
-            if (metadata.storageKey !== storageKey || !keyMatchesCategory(storageKey, metadata.category)) {
-              badRequest("La ruta de carga no coincide con la categor\xEDa autorizada.");
-            }
-            const contentType = String(metadata.contentType || "").toLowerCase();
-            normalizeMetadata(metadata, actor);
+            if (payload.storageKey !== storageKey) badRequest("La ruta de carga no coincide con la autorizaci\xF3n.");
+            const authorization = await authorizeUpload({ actor, storageKey, payload });
             return {
-              allowedContentTypes: [contentType],
-              maximumSizeInBytes: maxUploadBytes,
+              allowedContentTypes: [authorization.contentType],
+              maximumSizeInBytes: authorization.maximumSizeInBytes,
               addRandomSuffix: false,
-              cacheControlMaxAge: 60,
-              tokenPayload: JSON.stringify({ actor, metadata: { ...metadata, contentType, storageKey } })
+              cacheControlMaxAge: 60
             };
-          },
-          onUploadCompleted: async ({ blob, tokenPayload }) => {
-            const payload = JSON.parse(tokenPayload || "{}");
-            const stored = {
-              provider: this.id,
-              storage: "vercel-blob",
-              storageKey: blob.pathname || payload.metadata.storageKey,
-              pathname: blob.pathname || payload.metadata.storageKey,
-              url: blob.url,
-              originalName: path.basename(blob.pathname || payload.metadata.storageKey),
-              contentType: blob.contentType || payload.metadata.contentType,
-              size: blob.size || null
-            };
-            await onCompleted({ actor: payload.actor, metadata: payload.metadata, stored, blob });
           }
         });
       }
@@ -2529,6 +2687,7 @@ var require_storage_factory = __commonJS({
 // server/routes/media.js
 var require_media = __commonJS({
   "server/routes/media.js"(exports2, module2) {
+    var path = require("path");
     var router = require("express").Router();
     var multer = require("multer");
     var cfg = require_config();
@@ -2538,8 +2697,10 @@ var require_media = __commonJS({
     var users = require_users();
     var security = require_security();
     var storageFactory = require_storage_factory();
+    var { keyMatchesCategory } = require_storage_keys();
     var { auth, asyncRoute } = security;
     var { forbidden, badRequest } = require_errors();
+    var LICENSE_MAX_BYTES = 25 * 1024 * 1024;
     function mediaRoles() {
       return ["desarrollador", "administrador"];
     }
@@ -2550,51 +2711,220 @@ var require_media = __commonJS({
         badRequest("Metadatos multimedia inv\xE1lidos.");
       }
     }
+    function uploadedDescriptor(file) {
+      return { originalName: file?.originalname, contentType: file?.mimetype, sizeBytes: file?.size };
+    }
     var storage = storageFactory.getStorageProvider();
     var serverUpload = storage.getServerUploadConfig();
     var upload = serverUpload ? multer({
       dest: serverUpload.tempDir,
-      limits: { fileSize: cfg.media.maxUploadBytes, files: 1 },
-      fileFilter: (req, file, cb) => cb(null, /^(audio|video)\//.test(file.mimetype))
+      limits: { fileSize: cfg.media.maxUploadBytes, files: 2 },
+      fileFilter: (req, file, cb) => {
+        try {
+          if (file.fieldname === "file") media.validateMediaDescriptor(uploadedDescriptor(file));
+          else if (file.fieldname === "licenseFile") media.validateLicenseDescriptor(uploadedDescriptor(file));
+          else return cb(new Error("Campo de archivo no reconocido."));
+          cb(null, true);
+        } catch (error) {
+          cb(error);
+        }
+      }
     }) : null;
+    function storageRecord(metadata, descriptor, originalName) {
+      return {
+        provider: storage.id,
+        storage: storage.id === "local-disk" ? "local" : storage.id,
+        storageKey: metadata.key || metadata.pathname,
+        pathname: metadata.key || metadata.pathname,
+        url: metadata.url,
+        originalName: originalName || path.basename(metadata.key || metadata.pathname || "archivo"),
+        contentType: metadata.contentType || descriptor.contentType,
+        size: metadata.size == null ? null : metadata.size
+      };
+    }
+    async function verifiedStoredObject({ storageKey, originalName, contentType, sizeBytes, category, assetType = "media" }) {
+      if (!storage.writable) badRequest("El proveedor de almacenamiento activo es de solo lectura.");
+      if (assetType === "media" && !keyMatchesCategory(storageKey, category)) badRequest("El archivo no corresponde a la categor\xEDa seleccionada.");
+      if (assetType === "license" && !keyMatchesCategory(storageKey, "licenses")) badRequest("La ruta del soporte de licencia no es v\xE1lida.");
+      const metadata = await storage.getMetadata(storageKey).catch(() => badRequest("El archivo no existe en el almacenamiento conectado."));
+      const actualType = String(metadata.contentType || contentType || "").toLowerCase();
+      const descriptor = assetType === "license" ? media.validateLicenseDescriptor({ originalName, contentType: actualType, sizeBytes: metadata.size ?? sizeBytes }) : media.validateMediaDescriptor({ originalName, contentType: actualType });
+      if (assetType === "media" && Number(metadata.size ?? sizeBytes) > cfg.media.maxUploadBytes) badRequest("El archivo supera el tama\xF1o m\xE1ximo permitido.");
+      return storageRecord(metadata, descriptor, originalName);
+    }
+    async function deleteStored(record) {
+      if (!record) return;
+      const provider = storageFactory.getProviderForItem(record);
+      if (provider) await provider.deleteObject(record);
+    }
+    async function finishCatalogWrite(actor, metadata, stored, licenseStored, replaceItemId) {
+      if (replaceItemId) {
+        const result = await media.replaceUploaded(actor, replaceItemId, metadata, stored, licenseStored);
+        if (result.previous) {
+          await storageFactory.deleteStoredObject(result.previous).catch(() => {
+          });
+          if (licenseStored && result.previous.rights?.document) await deleteStored(result.previous.rights.document).catch(() => {
+          });
+        }
+        return result.item;
+      }
+      return media.addUploaded(actor, metadata, stored, licenseStored);
+    }
     router.get("/media/config", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
       const description = storage.describe();
       res.json({
         ...description,
         maxUploadBytes: cfg.media.maxUploadBytes,
+        maxLicenseBytes: LICENSE_MAX_BYTES,
         categories: media.categories(),
+        licenseTypes: media.licenseTypes(),
         blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
       });
     }));
     router.get("/media", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
-      res.json({ items: await media.list({ category: req.query.category || "", includeInactive: true }), categories: media.categories() });
+      res.json({
+        items: await media.list({ category: req.query.category || "", includeInactive: true }),
+        categories: media.categories(),
+        licenseTypes: media.licenseTypes()
+      });
+    }));
+    router.get("/media/orphans", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
+      if (!storage.writable) return res.json({ items: [] });
+      const [objects, catalog] = await Promise.all([storage.listObjects("rayoboss/"), media.list({ includeInactive: true })]);
+      const registered = /* @__PURE__ */ new Set();
+      for (const item of catalog) {
+        if (item.storageKey) registered.add(item.storageKey);
+        if (item.rights?.document?.storageKey) registered.add(item.rights.document.storageKey);
+      }
+      const items = objects.filter((object) => !registered.has(object.key) && !object.key.startsWith("rayoboss/licenses/")).map((object) => ({ ...object, originalName: path.basename(object.key) }));
+      res.json({ items });
+    }));
+    router.post("/media/import-stored", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
+      const body = validation.objectBody(req);
+      const metadata = parseMetadata(body.metadata);
+      const originalName = String(body.originalName || path.basename(String(body.storageKey || "archivo")));
+      const stored = await verifiedStoredObject({
+        storageKey: body.storageKey,
+        originalName,
+        contentType: metadata.contentType,
+        sizeBytes: body.sizeBytes,
+        category: metadata.category
+      });
+      metadata.contentType = stored.contentType;
+      const item = await media.addUploaded(req.actor, metadata, stored);
+      res.json({ ok: true, item });
+    }));
+    router.post("/media/confirm-upload", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
+      if (storage.uploadMode !== "direct") badRequest("La confirmaci\xF3n directa solo est\xE1 disponible con Vercel Blob.");
+      const body = validation.objectBody(req);
+      const metadata = parseMetadata(body.metadata);
+      const stored = await verifiedStoredObject({
+        storageKey: body.storageKey,
+        originalName: body.originalName,
+        contentType: metadata.contentType,
+        sizeBytes: body.sizeBytes,
+        category: metadata.category
+      });
+      metadata.contentType = stored.contentType;
+      let licenseStored = null;
+      if (body.licenseStorageKey) {
+        licenseStored = await verifiedStoredObject({
+          storageKey: body.licenseStorageKey,
+          originalName: body.licenseOriginalName,
+          contentType: body.licenseContentType,
+          sizeBytes: body.licenseSizeBytes,
+          assetType: "license"
+        });
+      }
+      const item = await finishCatalogWrite(req.actor, metadata, stored, licenseStored, String(body.replaceItemId || ""));
+      res.json({ ok: true, item });
     }));
     router.patch("/media/:id", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
       res.json({ ok: true, item: await media.update(req.actor, req.params.id, validation.objectBody(req)) });
     }));
+    router.post("/media/:id/license", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
+      if (storage.uploadMode !== "direct") badRequest("Esta confirmaci\xF3n de licencia requiere carga directa.");
+      const body = validation.objectBody(req);
+      const stored = await verifiedStoredObject({
+        storageKey: body.storageKey,
+        originalName: body.originalName,
+        contentType: body.contentType,
+        sizeBytes: body.sizeBytes,
+        assetType: "license"
+      });
+      const result = await media.attachLicense(req.actor, req.params.id, stored, body);
+      if (result.previous && result.previous.storageKey !== stored.storageKey) await deleteStored(result.previous).catch(() => {
+      });
+      res.json({ ok: true, item: result.item });
+    }));
     router.delete("/media/:id", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
       const item = await media.get(req.params.id);
       await storageFactory.deleteStoredObject(item);
+      if (item.rights?.document) await deleteStored(item.rights.document);
       await media.remove(req.actor, req.params.id);
       res.json({ ok: true });
     }));
     if (upload) {
-      router.post("/media/local-upload", auth("desarrollador", "administrador"), upload.single("file"), asyncRoute(async (req, res) => {
-        if (!req.file) badRequest("Selecciona un archivo de audio o video.");
+      router.post("/media/local-upload", auth("desarrollador", "administrador"), upload.fields([
+        { name: "file", maxCount: 1 },
+        { name: "licenseFile", maxCount: 1 }
+      ]), asyncRoute(async (req, res) => {
+        const file = req.files?.file?.[0];
+        const licenseFile = req.files?.licenseFile?.[0];
+        if (!file) badRequest("Selecciona un archivo de audio o video.");
         let stored = null;
+        let licenseStored = null;
         try {
           const metadata = parseMetadata(req.body.metadata);
-          metadata.contentType = req.file.mimetype;
+          const descriptor = media.validateMediaDescriptor(uploadedDescriptor(file));
+          metadata.contentType = descriptor.contentType;
           media.normalizeMetadata(metadata, req.actor);
+          stored = await storage.storeUploadedFile({
+            tempPath: file.path,
+            originalName: file.originalname,
+            contentType: descriptor.contentType,
+            sizeBytes: file.size,
+            category: metadata.category
+          });
+          if (licenseFile) {
+            const licenseDescriptor = media.validateLicenseDescriptor(uploadedDescriptor(licenseFile));
+            licenseStored = await storage.storeUploadedFile({
+              tempPath: licenseFile.path,
+              originalName: licenseFile.originalname,
+              contentType: licenseDescriptor.contentType,
+              sizeBytes: licenseFile.size,
+              category: "licenses"
+            });
+          }
+          const item = await finishCatalogWrite(req.actor, metadata, stored, licenseStored, String(req.body.replaceItemId || ""));
+          res.json({ ok: true, item });
+        } catch (error) {
+          if (stored) await storage.deleteObject(stored).catch(() => {
+          });
+          if (licenseStored) await storage.deleteObject(licenseStored).catch(() => {
+          });
+          const fs = require("fs/promises");
+          for (const pending of [file, licenseFile]) if (pending?.path) await fs.rm(pending.path, { force: true }).catch(() => {
+          });
+          throw error;
+        }
+      }));
+      router.post("/media/:id/license-upload", auth("desarrollador", "administrador"), upload.single("licenseFile"), asyncRoute(async (req, res) => {
+        if (!req.file) badRequest("Selecciona el soporte de licencia.");
+        let stored = null;
+        try {
+          const descriptor = media.validateLicenseDescriptor(uploadedDescriptor(req.file));
           stored = await storage.storeUploadedFile({
             tempPath: req.file.path,
             originalName: req.file.originalname,
-            contentType: req.file.mimetype,
+            contentType: descriptor.contentType,
             sizeBytes: req.file.size,
-            category: metadata.category
+            category: "licenses"
           });
-          const item = await media.addUploaded(req.actor, metadata, stored);
-          res.json({ ok: true, item });
+          const result = await media.attachLicense(req.actor, req.params.id, stored, parseMetadata(req.body.metadata));
+          if (result.previous) await deleteStored(result.previous).catch(() => {
+          });
+          res.json({ ok: true, item: result.item });
         } catch (error) {
           if (stored) await storage.deleteObject(stored).catch(() => {
           });
@@ -2610,13 +2940,24 @@ var require_media = __commonJS({
     router.post("/media/upload-plan", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
       if (storage.uploadMode !== "direct") badRequest("El proveedor activo no admite carga directa desde el navegador.");
       const body = validation.objectBody(req);
-      const metadata = parseMetadata(body.metadata);
-      metadata.contentType = String(metadata.contentType || body.contentType || "").toLowerCase();
+      const assetType = body.assetType === "license" ? "license" : "media";
       const sizeBytes = Number(body.sizeBytes);
-      if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > cfg.media.maxUploadBytes) badRequest("Tama\xF1o de archivo inv\xE1lido.");
-      media.normalizeMetadata(metadata, req.actor);
-      const storageKey = storage.createStorageKey({ category: metadata.category, originalName: body.originalName });
-      res.json({ storageKey });
+      const maximum = assetType === "license" ? LICENSE_MAX_BYTES : cfg.media.maxUploadBytes;
+      if (!Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > maximum) badRequest("Tama\xF1o de archivo inv\xE1lido.");
+      let descriptor;
+      let category;
+      if (assetType === "license") {
+        descriptor = media.validateLicenseDescriptor({ originalName: body.originalName, contentType: body.contentType, sizeBytes });
+        category = "licenses";
+      } else {
+        const metadata = parseMetadata(body.metadata);
+        descriptor = media.validateMediaDescriptor({ originalName: body.originalName, contentType: body.contentType });
+        metadata.contentType = descriptor.contentType;
+        media.normalizeMetadata(metadata, req.actor);
+        category = metadata.category;
+      }
+      const storageKey = storage.createStorageKey({ category, originalName: body.originalName });
+      res.json({ storageKey, assetType, contentType: descriptor.contentType });
     }));
     async function actorFromRequest(req) {
       const token = security.getToken(req);
@@ -2632,10 +2973,19 @@ var require_media = __commonJS({
         req,
         body: req.body,
         getActor: actorFromRequest,
-        normalizeMetadata: media.normalizeMetadata,
-        maxUploadBytes: cfg.media.maxUploadBytes,
-        onCompleted: async ({ actor, metadata, stored }) => {
-          await media.addUploaded(actor, metadata, stored);
+        authorizeUpload: async ({ actor, storageKey, payload }) => {
+          const assetType = payload.assetType === "license" ? "license" : "media";
+          if (assetType === "license") {
+            if (!keyMatchesCategory(storageKey, "licenses")) badRequest("Ruta de licencia no autorizada.");
+            const descriptor2 = media.validateLicenseDescriptor(payload);
+            return { contentType: descriptor2.contentType, maximumSizeInBytes: LICENSE_MAX_BYTES };
+          }
+          const metadata = parseMetadata(payload.metadata);
+          const descriptor = media.validateMediaDescriptor(payload);
+          metadata.contentType = descriptor.contentType;
+          media.normalizeMetadata(metadata, actor);
+          if (!keyMatchesCategory(storageKey, metadata.category)) badRequest("La ruta no coincide con la categor\xEDa autorizada.");
+          return { contentType: descriptor.contentType, maximumSizeInBytes: cfg.media.maxUploadBytes };
         }
       });
       res.json(result);
@@ -2918,7 +3268,9 @@ var require_programming = __commonJS({
       if (!timeline.length || total <= 0) {
         return { item: null, next: null, playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: 0, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds };
       }
-      let cursor = Math.floor(date.getTime() / 1e3) % total;
+      const epochSeconds = Math.floor(date.getTime() / 1e3);
+      const cycle = Math.floor(epochSeconds / total);
+      let cursor = epochSeconds % total;
       for (let index = 0; index < timeline.length; index++) {
         const duration = timeline[index].durationSeconds || 30;
         if (cursor < duration) {
@@ -2930,12 +3282,14 @@ var require_programming = __commonJS({
             offsetSeconds: cursor,
             remainingSeconds: Math.max(0, duration - cursor),
             progressPercent: Math.min(100, Math.max(0, cursor / duration * 100)),
-            crossfadeSeconds: state.continuity.crossfadeSeconds
+            crossfadeSeconds: state.continuity.crossfadeSeconds,
+            startedAt: new Date((epochSeconds - cursor) * 1e3).toISOString(),
+            playoutKey: `autodj:${state.revision || 0}:${playlist.id}:${cycle}:${index}`
           };
         }
         cursor -= duration;
       }
-      return { item: timeline[0], next: timeline[1] || timeline[0], playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: timeline[0].durationSeconds || 30, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds };
+      return { item: timeline[0], next: timeline[1] || timeline[0], playlist: { id: playlist.id, name: playlist.name }, slot, offsetSeconds: 0, remainingSeconds: timeline[0].durationSeconds || 30, progressPercent: 0, crossfadeSeconds: state.continuity.crossfadeSeconds, startedAt: date.toISOString(), playoutKey: `autodj:${state.revision || 0}:${playlist.id}:${cycle}:0` };
     }
     async function get() {
       return clone(await load({ fresh: cfg.isVercel }));
@@ -2967,16 +3321,264 @@ var require_programming2 = __commonJS({
   }
 });
 
+// server/core/playback-history.js
+var require_playback_history = __commonJS({
+  "server/core/playback-history.js"(exports2, module2) {
+    var path = require("path");
+    var crypto = require("crypto");
+    var cfg = require_config();
+    var runtimeStore = require_runtime_store();
+    var { writePrimary, readRecoverable } = require_storage();
+    var { badRequest } = require_errors();
+    var KEY = "playback-history-v1";
+    var FILE = cfg.dataDir ? path.join(cfg.dataDir, "playback-history.json") : null;
+    var RETENTION_MONTHS = 36;
+    var MAX_EVENTS = 1e5;
+    var localState = null;
+    var queue = Promise.resolve();
+    function clone(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+    function empty() {
+      return { schemaVersion: 1, revision: 1, events: [] };
+    }
+    function validMonth(value) {
+      const month = String(value || "").trim();
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) badRequest("Mes inv\xE1lido; usa AAAA-MM.");
+      return month;
+    }
+    function monthOf(value) {
+      return String(value).slice(0, 7);
+    }
+    function retentionCutoff() {
+      const date = /* @__PURE__ */ new Date();
+      date.setUTCDate(1);
+      date.setUTCHours(0, 0, 0, 0);
+      date.setUTCMonth(date.getUTCMonth() - RETENTION_MONTHS);
+      return date.getTime();
+    }
+    function validate(state) {
+      if (!state || state.schemaVersion !== 1 || !Array.isArray(state.events)) throw new Error("Hist\xF3rico de reproducci\xF3n inv\xE1lido.");
+      return state;
+    }
+    async function persist(state) {
+      state.revision = (state.revision || 0) + 1;
+      if (cfg.isVercel) {
+        await runtimeStore.set(KEY, state, { ttl: 94608e3, name: "Hist\xF3rico de reproducci\xF3n RayoBoss", tags: ["rayoboss-playback"] });
+      } else if (FILE) writePrimary(FILE, state);
+    }
+    async function load({ fresh = false } = {}) {
+      if (localState && !fresh && !cfg.isVercel) return localState;
+      let state = cfg.isVercel ? await runtimeStore.get(KEY) : FILE ? readRecoverable(FILE) : null;
+      if (!state) {
+        state = empty();
+        await persist(state);
+      }
+      validate(state);
+      localState = state;
+      return state;
+    }
+    function mutate(fn) {
+      const execute = async () => {
+        const state = await load({ fresh: cfg.isVercel });
+        const outcome = await fn(state);
+        if (outcome && outcome.changed === false) return outcome.result;
+        const cutoff = retentionCutoff();
+        state.events = state.events.filter((event) => Date.parse(event.playedAt) >= cutoff).slice(-MAX_EVENTS);
+        await persist(state);
+        localState = state;
+        return outcome && Object.prototype.hasOwnProperty.call(outcome, "result") ? outcome.result : outcome;
+      };
+      const run = queue.then(execute, execute);
+      queue = run.catch(() => {
+      });
+      return run;
+    }
+    function snapshot(item) {
+      return {
+        itemId: item.id,
+        title: item.title,
+        artist: item.artist || "",
+        album: item.album || "",
+        isrc: item.isrc || "",
+        category: item.category,
+        kind: item.kind,
+        durationSeconds: Number(item.durationSeconds) || 0,
+        licenseType: item.rights?.licenseType || "pendiente",
+        rightsBasis: item.rights?.basis || "",
+        rightsReference: item.rights?.reference || "",
+        licenseDocument: Boolean(item.rights?.document)
+      };
+    }
+    function record(item, { source, playoutKey = "", playedAt = (/* @__PURE__ */ new Date()).toISOString(), actor = null } = {}) {
+      return mutate(async (state) => {
+        const key = String(playoutKey || "").slice(0, 240);
+        if (key) {
+          const existing = state.events.find((event2) => event2.playoutKey === key);
+          if (existing) return { changed: false, result: { recorded: false, event: clone(existing) } };
+        }
+        const event = {
+          id: crypto.randomBytes(12).toString("hex"),
+          playoutKey: key || `manual:${crypto.randomBytes(16).toString("hex")}`,
+          playedAt,
+          source: String(source || "autodj").slice(0, 40),
+          recordedBy: actor?.username || "sistema",
+          ...snapshot(item)
+        };
+        state.events.push(event);
+        return { changed: true, result: { recorded: true, event: clone(event) } };
+      });
+    }
+    function recordAutodj(now) {
+      if (!now?.item || !now.playoutKey) return Promise.resolve({ recorded: false, event: null });
+      return record(now.item, { source: "autodj", playoutKey: now.playoutKey, playedAt: now.startedAt || (/* @__PURE__ */ new Date()).toISOString() });
+    }
+    async function report(monthInput) {
+      const month = validMonth(monthInput);
+      const state = await load({ fresh: cfg.isVercel });
+      const events = state.events.filter((event) => monthOf(event.playedAt) === month).sort((a, b) => a.playedAt.localeCompare(b.playedAt));
+      const groups = /* @__PURE__ */ new Map();
+      for (const event of events) {
+        const key = `${event.itemId}|${event.licenseType}`;
+        let row = groups.get(key);
+        if (!row) {
+          row = {
+            itemId: event.itemId,
+            title: event.title,
+            artist: event.artist,
+            album: event.album,
+            isrc: event.isrc,
+            category: event.category,
+            licenseType: event.licenseType,
+            rightsBasis: event.rightsBasis,
+            rightsReference: event.rightsReference,
+            licenseDocument: event.licenseDocument,
+            plays: 0,
+            totalSeconds: 0,
+            firstPlayedAt: event.playedAt,
+            lastPlayedAt: event.playedAt
+          };
+          groups.set(key, row);
+        }
+        row.plays += 1;
+        row.totalSeconds += Number(event.durationSeconds) || 0;
+        row.lastPlayedAt = event.playedAt;
+      }
+      const items = [...groups.values()].sort((a, b) => b.plays - a.plays || a.title.localeCompare(b.title, "es"));
+      const byLicense = {};
+      for (const row of items) byLicense[row.licenseType] = (byLicense[row.licenseType] || 0) + row.plays;
+      return {
+        month,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        totals: {
+          plays: events.length,
+          uniquePieces: items.length,
+          totalSeconds: items.reduce((sum, item) => sum + item.totalSeconds, 0),
+          byLicense
+        },
+        items,
+        events: events.slice(-5e3).reverse()
+      };
+    }
+    module2.exports = {
+      record,
+      recordAutodj,
+      report,
+      validMonth,
+      _resetForTests: () => {
+        localState = null;
+        queue = Promise.resolve();
+      }
+    };
+  }
+});
+
+// server/routes/reports.js
+var require_reports = __commonJS({
+  "server/routes/reports.js"(exports2, module2) {
+    var router = require("express").Router();
+    var history = require_playback_history();
+    var media = require_media_library();
+    var live = require_live();
+    var { auth, asyncRoute } = require_security();
+    var { badRequest } = require_errors();
+    function currentMonth() {
+      return (/* @__PURE__ */ new Date()).toISOString().slice(0, 7);
+    }
+    function csvCell(value) {
+      let text = String(value == null ? "" : value);
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    router.get("/reports/playback", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
+      const report = await history.report(req.query.month || currentMonth());
+      res.json({ ...report, licenseTypes: media.licenseTypes() });
+    }));
+    router.get("/reports/playback.csv", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
+      const report = await history.report(req.query.month || currentMonth());
+      const headers = ["T\xEDtulo", "Artista", "\xC1lbum", "ISRC", "Categor\xEDa", "Tipo de licencia", "Base de derechos", "Referencia", "Soporte adjunto", "Reproducciones", "Segundos emitidos", "Primera reproducci\xF3n", "\xDAltima reproducci\xF3n"];
+      const rows = report.items.map((item) => [
+        item.title,
+        item.artist,
+        item.album,
+        item.isrc,
+        item.category,
+        media.licenseTypes()[item.licenseType] || item.licenseType,
+        item.rightsBasis,
+        item.rightsReference,
+        item.licenseDocument ? "S\xED" : "No",
+        item.plays,
+        Math.round(item.totalSeconds * 1e3) / 1e3,
+        item.firstPlayedAt,
+        item.lastPlayedAt
+      ]);
+      const csv = `\uFEFF${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+      res.set("Content-Type", "text/csv; charset=utf-8");
+      res.set("Content-Disposition", `attachment; filename="rayoboss-reproducciones-${report.month}.csv"`);
+      res.send(csv);
+    }));
+    router.post("/reports/playback/record", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
+      const source = String(req.body?.source || "");
+      if (!["live-effect", "live-bed", "live-media"].includes(source)) badRequest("Origen de reproducci\xF3n inv\xE1lido.");
+      const status = await live.status();
+      if (!status.live) badRequest("Solo pueden registrarse piezas del estudio durante una transmisi\xF3n en vivo.");
+      const item = await media.get(String(req.body?.itemId || ""));
+      const result = await history.record(item, { source, actor: req.actor });
+      res.json({ ok: true, ...result });
+    }));
+    module2.exports = router;
+  }
+});
+
 // server/routes/public.js
 var require_public = __commonJS({
   "server/routes/public.js"(exports2, module2) {
     var router = require("express").Router();
     var live = require_live();
     var programming = require_programming();
+    var playbackHistory = require_playback_history();
     var cfg = require_config();
     var { asyncRoute } = require_security();
     function absolute(req, path) {
       return `${req.protocol}://${req.get("host")}${path}`;
+    }
+    function publicMediaItem(item) {
+      if (!item) return null;
+      return {
+        id: item.id,
+        title: item.title,
+        artist: item.artist || "",
+        album: item.album || "",
+        category: item.category,
+        kind: item.kind,
+        contentType: item.contentType,
+        durationSeconds: item.durationSeconds,
+        url: item.url
+      };
+    }
+    function publicAutodj(now) {
+      if (!now) return null;
+      return { ...now, item: publicMediaItem(now.item), next: publicMediaItem(now.next) };
     }
     router.get("/public/on-air", asyncRoute(async (req, res) => {
       const status = await live.status();
@@ -2986,7 +3588,7 @@ var require_public = __commonJS({
       res.json({
         mode: status.live ? "live" : "autodj",
         status,
-        autodj,
+        autodj: publicAutodj(autodj),
         liveTransport,
         liveMediaUrl,
         embedUrl: absolute(req, "/embed?autoplay=1"),
@@ -3003,6 +3605,7 @@ var require_public = __commonJS({
       }
       const current = await programming.now();
       if (!current.item) return res.redirect(307, "/api/live/stream");
+      await playbackHistory.recordAutodj(current);
       res.redirect(307, current.item.url);
     }));
     router.get("/public/video", asyncRoute(async (req, res) => {
@@ -3013,7 +3616,16 @@ var require_public = __commonJS({
       }
       const current = await programming.now();
       if (!current.item || current.item.kind !== "video") return res.status(204).end();
+      await playbackHistory.recordAutodj(current);
       res.redirect(307, current.item.url);
+    }));
+    router.post("/public/playback", asyncRoute(async (req, res) => {
+      const current = await programming.now();
+      if (!current.item || String(req.body?.playoutKey || "") !== current.playoutKey) {
+        return res.json({ ok: true, recorded: false });
+      }
+      const result = await playbackHistory.recordAutodj(current);
+      res.json({ ok: true, recorded: result.recorded });
     }));
     router.get("/public/embed-code", (req, res) => {
       const url = absolute(req, "/embed?autoplay=1");
@@ -3047,11 +3659,15 @@ var require_app = __commonJS({
     app2.use("/api", require_rtc2());
     app2.use("/api", require_media());
     app2.use("/api", require_programming2());
+    app2.use("/api", require_reports());
     app2.use("/api", require_public());
     if (!cfg.isVercel && cfg.dataDir) {
       app2.use(cfg.storage.localPublicPath, express.static(cfg.storage.localRootDir, { maxAge: "1h", fallthrough: false }));
     }
-    app2.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"], maxAge: cfg.isProduction ? "1h" : 0 }));
+    var publicDir = path.join(__dirname, "..", "public");
+    var modulePaths = ["/inicio", "/administrativo", "/en-vivo", "/biblioteca", "/programacion", "/reproductor", "/informes", "/diagnostico"];
+    app2.get(modulePaths, (req, res) => res.sendFile(path.join(publicDir, "index.html")));
+    app2.use(express.static(publicDir, { extensions: ["html"], maxAge: cfg.isProduction ? "1h" : 0 }));
     app2.use("/api", (req, res) => res.status(404).json({ error: "Ruta no encontrada." }));
     app2.use((err, req, res, next) => {
       const status = Number.isInteger(err.status) ? err.status : 500;

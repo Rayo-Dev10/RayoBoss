@@ -26,6 +26,8 @@ const security = require('../server/middleware/security');
 const cfg = require('../server/config');
 const storageFactory = require('../server/core/storage/storage-factory');
 const StorageProvider = require('../server/core/storage/storage-provider');
+const mediaLibrary = require('../server/core/media-library');
+const playbackHistory = require('../server/core/playback-history');
 
 let base;
 const cookies = {};
@@ -750,6 +752,110 @@ async function test(name, fn) {
     assert.ok(ignore.split(/\r?\n/).includes('/storage/'));
     assert.equal(ignore.split(/\r?\n/).includes('storage/'), false);
     assert.equal(fs.existsSync(path.join(root, 'server/core/storage/storage-factory.js')), true);
+  });
+
+  await test('72. Panel administrativo no carga ni reproduce el AutoDJ al ingresar', async () => {
+    const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+    const embedHtml = fs.readFileSync(path.join(root, 'public/embed.html'), 'utf8');
+    const embedClient = fs.readFileSync(path.join(root, 'public/js/embed.js'), 'utf8');
+    assert.match(html, /id="publicFrame" data-src="\/embed\?autoplay=0"/);
+    assert.equal(/id="publicFrame"[^>]+src=/.test(html.replace('data-src=', 'data-source=')), false);
+    assert.equal(/<(audio|video)[^>]+autoplay/.test(embedHtml), false);
+    assert.ok(embedClient.includes("get('autoplay') === '1'"));
+  });
+
+  await test('73. Módulos principales responden mediante URLs directas', async () => {
+    for (const route of ['/inicio', '/administrativo', '/en-vivo', '/biblioteca', '/programacion', '/informes', '/reproductor', '/diagnostico']) {
+      const result = await request('GET', route);
+      assert.equal(result.status, 200, route);
+      assert.match(result.body, /RayoBoss/);
+    }
+  });
+
+  let managedItem;
+  let managedOldKey;
+  await test('74. Biblioteca obtiene duración, guarda metadatos musicales y adjunta certificado', async () => {
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('audio-con-metadatos')], { type: 'audio/mpeg' }), 'Canción documentada.mp3');
+    form.append('licenseFile', new Blob([Buffer.from('PIXABAY LICENSE CERTIFICATE')], { type: 'text/plain' }), 'pixabay-license.txt');
+    form.append('metadata', JSON.stringify({
+      title: 'Canción documentada', artist: 'Artista de prueba', album: 'Colección institucional', genre: 'Instrumental',
+      year: '2026', isrc: 'CO-ABC-26-00001', category: 'autodj.libre', durationSeconds: 181.25,
+      licenseType: 'licencia-libre', rightsBasis: 'Pixabay Content License', rightsReference: 'Archivo 273359',
+      rightsConfirmed: true, contentType: 'audio/mpeg'
+    }));
+    const response = await fetch(`${base}/api/media/local-upload`, { method: 'POST', headers: { Cookie: cookies.devStorage }, body: form });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.item.durationSeconds, 181.25);
+    assert.equal(body.item.artist, 'Artista de prueba');
+    assert.equal(body.item.isrc, 'CO-ABC-26-00001');
+    assert.equal(body.item.rights.licenseType, 'licencia-libre');
+    assert.ok(body.item.rights.document.storageKey.startsWith('rayoboss/licenses/'));
+    managedItem = body.item;
+    managedOldKey = body.item.storageKey;
+  });
+
+  await test('75. Biblioteca detecta archivos físicos que todavía no están en el catálogo', async () => {
+    const provider = storageFactory.getStorageProvider();
+    const key = provider.createStorageKey({ category: 'autodj.libre', originalName: 'huérfana.mp3' });
+    await provider.saveObject({ key, body: Buffer.from('objeto-sin-ficha'), contentType: 'audio/mpeg', originalName: 'huérfana.mp3' });
+    const result = await request('GET', '/api/media/orphans', null, 'devStorage');
+    assert.equal(result.status, 200);
+    assert.ok(result.body.items.some(item => item.key === key));
+    await provider.deleteObject(key);
+  });
+
+  await test('76. Reemplazar un archivo conserva la identidad usada por las playlists', async () => {
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('audio-reemplazado')], { type: 'audio/mpeg' }), 'Nueva versión.mp3');
+    form.append('replaceItemId', managedItem.id);
+    form.append('metadata', JSON.stringify({
+      title: managedItem.title, artist: managedItem.artist, album: managedItem.album, genre: managedItem.genre,
+      year: managedItem.year, isrc: managedItem.isrc, category: managedItem.category, durationSeconds: 179,
+      licenseType: managedItem.rights.licenseType, rightsBasis: managedItem.rights.basis,
+      rightsReference: managedItem.rights.reference, rightsConfirmed: true, contentType: 'audio/mpeg'
+    }));
+    const response = await fetch(`${base}/api/media/local-upload`, { method: 'POST', headers: { Cookie: cookies.devStorage }, body: form });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.item.id, managedItem.id);
+    assert.notEqual(body.item.storageKey, managedOldKey);
+    const provider = storageFactory.getStorageProvider();
+    assert.equal(await provider.exists(managedOldKey), false);
+    assert.equal(await provider.exists(body.item.storageKey), true);
+    assert.equal(body.item.rights.document.storageKey, managedItem.rights.document.storageKey);
+    managedItem = body.item;
+  });
+
+  await test('77. Informe mensual consolida licencias y no duplica una ocurrencia por oyente', async () => {
+    const item = await mediaLibrary.get('demo-indie');
+    const month = new Date().toISOString().slice(0, 7);
+    const before = await playbackHistory.report(month);
+    const key = `test-playout-${Date.now()}`;
+    const first = await playbackHistory.record(item, { source: 'autodj', playoutKey: key });
+    const duplicate = await playbackHistory.record(item, { source: 'autodj', playoutKey: key });
+    assert.equal(first.recorded, true);
+    assert.equal(duplicate.recorded, false);
+    const result = await request('GET', `/api/reports/playback?month=${month}`, null, 'devStorage');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.totals.plays, before.totals.plays + 1);
+    assert.ok(result.body.items.some(row => row.itemId === item.id && row.licenseType));
+    const csv = await request('GET', `/api/reports/playback.csv?month=${month}`, null, 'devStorage');
+    assert.equal(csv.status, 200);
+    assert.match(csv.headers['content-type'], /text\/csv/);
+    assert.match(csv.body, /Reproducciones/);
+    await request('DELETE', `/api/media/${managedItem.id}`, null, 'devStorage');
+  });
+
+  await test('78. Estado público no expone soportes jurídicos ni metadatos internos', async () => {
+    const result = await request('GET', '/api/public/on-air');
+    assert.equal(result.status, 200);
+    if (result.body.autodj?.item) {
+      assert.equal('rights' in result.body.autodj.item, false);
+      assert.equal('storageKey' in result.body.autodj.item, false);
+      assert.equal('notes' in result.body.autodj.item, false);
+    }
   });
 
   server.close();

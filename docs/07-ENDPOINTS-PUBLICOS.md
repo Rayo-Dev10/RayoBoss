@@ -18,6 +18,8 @@ Uso recomendado en páginas estáticas:
 
 El navegador puede exigir una interacción para audio audible.
 
+`autoplay=1` solicita el intento de reproducción automática. Con `autoplay=0`, el reproductor prepara la pieza pero permanece en silencio hasta una acción del usuario. El panel administrativo no crea el iframe al ingresar; solo lo carga bajo petición expresa en `/reproductor`.
+
 ## Estado
 
 ```text
@@ -25,6 +27,8 @@ GET /api/public/on-air
 ```
 
 Devuelve modo, título, elemento AutoDJ, siguiente pieza, playlist, franja, progreso y endpoints.
+
+El reproductor informa el inicio real mediante `POST /api/public/playback`. El servidor valida la ocurrencia vigente y la deduplica para que el número de oyentes no multiplique el informe mensual.
 
 ## Audio
 

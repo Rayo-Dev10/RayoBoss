@@ -9,14 +9,6 @@ let mediaConfig302 = null;
 let mediaItems302 = [];
 let programming302 = null;
 
-function categoryLabel302(category) {
-  return mediaConfig302?.categories?.[category]?.label || category;
-}
-function formatExpiry302(item) {
-  if (!item.expiresAt) return 'Persistente';
-  const ms = Date.parse(item.expiresAt) - Date.now();
-  return ms > 0 ? `Caduca en ${Math.max(1, Math.ceil(ms / 3600000))} h` : 'Caducado';
-}
 async function loadPublicEndpoints302() {
   try {
     const data = await api('/api/public/embed-code');
@@ -27,79 +19,15 @@ async function loadPublicEndpoints302() {
 async function loadMedia302() {
   if (!currentUser || !roleIs('desarrollador', 'administrador', 'locutor')) return;
   try {
-    if (roleIs('desarrollador', 'administrador')) mediaConfig302 = await api('/api/media/config');
-    const result = await api('/api/media');
+    const result = await window.RayoLibraryV4.load();
     mediaItems302 = result.items || [];
-    mediaConfig302 = mediaConfig302 || { categories: result.categories || {}, provider: 'lectura' };
-    const select = $('mediaCategory');
-    if (select && !select.options.length) {
-      for (const [value, info] of Object.entries(mediaConfig302.categories || {})) {
-        const option = document.createElement('option'); option.value = value; option.textContent = info.label; select.append(option);
-      }
-    }
-    renderMedia302();
+    mediaConfig302 = result.config || mediaConfig302;
     loadStudioAssets302();
     if (window.RayoProgrammingV4) window.RayoProgrammingV4.setMediaItems(mediaItems302, mediaConfig302);
-    if (roleIs('desarrollador', 'administrador')) {
-      const provider = mediaConfig302.provider;
-      message('mediamsg', !mediaConfig302.writable
-        ? `Biblioteca de demostración activa. ${mediaConfig302.reason || 'Conecta un proveedor persistente para habilitar cargas.'}`
-        : `Almacenamiento activo: ${provider} (${mediaConfig302.uploadMode}).`, mediaConfig302.writable);
-    }
   } catch (error) { if ($('mediamsg')) message('mediamsg', error.message, false); }
 }
-function renderMedia302() {
-  const table = $('mediaTable'); if (!table) return;
-  const body = table.querySelector('tbody'); body.replaceChildren();
-  for (const item of mediaItems302) {
-    const row = document.createElement('tr');
-    row.append(cell(item.title), cell(categoryLabel302(item.category)), cell(`${item.kind} · ${item.contentType}`), cell(formatExpiry302(item)));
-    const actions = document.createElement('td');
-    if (roleIs('desarrollador', 'administrador')) {
-      actions.append(actionButton(item.active ? 'Desactivar' : 'Activar', 'btn linea', () => toggleMedia302(item)));
-      if (!item.bundled) actions.append(actionButton('Eliminar', 'btn linea', () => deleteMedia302(item)));
-    }
-    row.append(actions); body.append(row);
-  }
-}
 async function uploadMedia302() {
-  const file = $('mediaFile').files[0];
-  if (!file) return message('mediamsg', 'Selecciona un archivo de audio o video.', false);
-  const metadata = {
-    title: $('mediaTitle').value || file.name,
-    category: $('mediaCategory').value,
-    subtype: $('mediaSubtype').value,
-    durationSeconds: Number($('mediaDuration').value) || 30,
-    rightsBasis: $('rightsBasis').value,
-    rightsReference: $('rightsReference').value,
-    rightsConfirmed: $('rightsConfirmed').checked,
-    contentType: file.type
-  };
-  $('btnUploadMedia').disabled = true; visible('uploadProgress', true); $('uploadProgress').value = 0;
-  try {
-    if (!mediaConfig302) mediaConfig302 = await api('/api/media/config');
-    if (mediaConfig302.uploadMode === 'direct') {
-      if (typeof window.rayoBlobUpload !== 'function') throw new Error('El cliente de Vercel Blob no está compilado. Ejecuta npm run build.');
-      await window.rayoBlobUpload(file, metadata, progress => { $('uploadProgress').value = progress.percentage || 0; });
-      message('mediamsg', 'Archivo cargado en Vercel Blob y agregado al catálogo.', true);
-    } else if (mediaConfig302.uploadMode === 'server') {
-      const form = new FormData(); form.append('file', file); form.append('metadata', JSON.stringify(metadata));
-      const response = await fetch('/api/media/local-upload', { method:'POST', body:form });
-      const body = await response.json().catch(()=>({})); if (!response.ok) throw new Error(body.error || 'Error al cargar.');
-      $('uploadProgress').value = 100; message('mediamsg', 'Archivo guardado en el almacenamiento local de la VPS.', true);
-    } else throw new Error('Crea y conecta un Vercel Blob Store para habilitar cargas persistentes en este despliegue.');
-    $('mediaFile').value = ''; $('mediaTitle').value = ''; await sleep(1200); await loadMedia302();
-  } catch (error) { message('mediamsg', error.message, false); }
-  finally { $('btnUploadMedia').disabled = false; setTimeout(()=>visible('uploadProgress', false),1000); }
-}
-async function toggleMedia302(item) {
-  try { await api(`/api/media/${encodeURIComponent(item.id)}`, { method:'PATCH', body:JSON.stringify({ active:!item.active }) }); await loadMedia302(); }
-  catch (error) { message('mediamsg', error.message, false); }
-}
-async function deleteMedia302(item) {
-  if (!confirm(`Eliminar ${item.title}?`)) return;
-  try { await api(`/api/media/${encodeURIComponent(item.id)}`, { method:'DELETE' }); await loadMedia302(); }
-  catch (error) { message('mediamsg', error.message, false); }
+  return window.RayoLibraryV4.uploadSelected();
 }
 async function loadProgramming302() {
   if (window.RayoProgrammingV4) await window.RayoProgrammingV4.load();
@@ -155,7 +83,9 @@ async function toggleBed302() {
     const source=hostStudio.context.createMediaElementSource(element); const gain=hostStudio.context.createGain(); gain.gain.value=Number($('bedVolume').value)||0.55;
     const monitor=hostStudio.context.createGain(); monitor.gain.value=0.18;
     source.connect(gain); gain.connect(hostStudio.broadcastDestination); gain.connect(monitor); monitor.connect(hostStudio.context.destination);
-    hostStudio.bed={element,source,gain,monitor}; await element.play(); $('btnBed').textContent='Detener cama'; setupDucking302();
+    hostStudio.bed={element,source,gain,monitor}; await element.play();
+    api('/api/reports/playback/record',{method:'POST',body:JSON.stringify({itemId:item.id,source:'live-bed'})}).catch(()=>{});
+    $('btnBed').textContent='Detener cama'; setupDucking302();
   } catch(error){message('studiomsg',error.message,false);}
 }
 async function playEffect302(item) {
@@ -165,6 +95,7 @@ async function playEffect302(item) {
     const source=hostStudio.context.createMediaElementSource(element); const monitor=hostStudio.context.createGain(); monitor.gain.value=0.35;
     source.connect(hostStudio.broadcastDestination); source.connect(monitor); monitor.connect(hostStudio.context.destination);
     hostStudio.effectPlayers.add(element); element.onended=()=>{try{source.disconnect();monitor.disconnect();}catch(_){}hostStudio.effectPlayers.delete(element);}; await element.play();
+    api('/api/reports/playback/record',{method:'POST',body:JSON.stringify({itemId:item.id,source:'live-effect'})}).catch(()=>{});
   } catch(error){message('studiomsg',error.message,false);}
 }
 
@@ -211,7 +142,7 @@ stopHostStudio = function stopHostStudio302() {
   return stopHostStudio301();
 };
 const show301 = show;
-show = function show302(section){show301(section);if(section==='media')loadMedia302();if(section==='program')loadProgramming302();if(section==='player')loadPublicEndpoints302();};
+show = function show302(section,options){show301(section,options);if(section==='media')loadMedia302();if(section==='program')loadProgramming302();if(section==='player')loadPublicEndpoints302();};
 const enter301 = enter;
 enter = function enter302(){enter301();loadPublicEndpoints302();if(roleIs('desarrollador','administrador','locutor')){loadMedia302();loadProgramming302();}};
 

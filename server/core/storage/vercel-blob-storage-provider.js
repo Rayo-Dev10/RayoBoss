@@ -1,6 +1,5 @@
-const path = require('path');
 const StorageProvider = require('./storage-provider');
-const { assertSafeStorageKey, keyMatchesCategory } = require('./storage-keys');
+const { assertSafeStorageKey } = require('./storage-keys');
 const { badRequest } = require('../../utils/errors');
 
 class VercelBlobStorageProvider extends StorageProvider {
@@ -42,14 +41,20 @@ class VercelBlobStorageProvider extends StorageProvider {
 
   async listObjects(prefix = 'rayoboss/') {
     const { list } = await import('@vercel/blob');
-    const result = await list({ prefix, token: this.token });
-    return result.blobs.map(blob => ({
-      key: blob.pathname,
-      url: blob.url,
-      size: blob.size,
-      uploadedAt: blob.uploadedAt,
-      provider: this.id
-    }));
+    const output = [];
+    let cursor;
+    do {
+      const result = await list({ prefix, cursor, limit: 1000, token: this.token });
+      output.push(...result.blobs.map(blob => ({
+        key: blob.pathname,
+        url: blob.url,
+        size: blob.size,
+        uploadedAt: blob.uploadedAt,
+        provider: this.id
+      })));
+      cursor = result.hasMore ? result.cursor : undefined;
+    } while (cursor && output.length < 10_000);
+    return output;
   }
 
   async deleteObject(itemOrKey) {
@@ -81,7 +86,7 @@ class VercelBlobStorageProvider extends StorageProvider {
     };
   }
 
-  async handleDirectUpload({ req, body, getActor, normalizeMetadata, onCompleted, maxUploadBytes }) {
+  async handleDirectUpload({ req, body, getActor, authorizeUpload }) {
     const { handleUpload } = await import('@vercel/blob/client');
     return handleUpload({
       body,
@@ -89,36 +94,18 @@ class VercelBlobStorageProvider extends StorageProvider {
       token: this.token,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         const actor = await getActor(req);
-        let metadata;
-        try { metadata = JSON.parse(clientPayload || '{}'); }
+        let payload;
+        try { payload = JSON.parse(clientPayload || '{}'); }
         catch (_) { badRequest('Metadatos de carga inválidos.'); }
         const storageKey = assertSafeStorageKey(pathname);
-        if (metadata.storageKey !== storageKey || !keyMatchesCategory(storageKey, metadata.category)) {
-          badRequest('La ruta de carga no coincide con la categoría autorizada.');
-        }
-        const contentType = String(metadata.contentType || '').toLowerCase();
-        normalizeMetadata(metadata, actor);
+        if (payload.storageKey !== storageKey) badRequest('La ruta de carga no coincide con la autorización.');
+        const authorization = await authorizeUpload({ actor, storageKey, payload });
         return {
-          allowedContentTypes: [contentType],
-          maximumSizeInBytes: maxUploadBytes,
+          allowedContentTypes: [authorization.contentType],
+          maximumSizeInBytes: authorization.maximumSizeInBytes,
           addRandomSuffix: false,
-          cacheControlMaxAge: 60,
-          tokenPayload: JSON.stringify({ actor, metadata: { ...metadata, contentType, storageKey } })
+          cacheControlMaxAge: 60
         };
-      },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        const payload = JSON.parse(tokenPayload || '{}');
-        const stored = {
-          provider: this.id,
-          storage: 'vercel-blob',
-          storageKey: blob.pathname || payload.metadata.storageKey,
-          pathname: blob.pathname || payload.metadata.storageKey,
-          url: blob.url,
-          originalName: path.basename(blob.pathname || payload.metadata.storageKey),
-          contentType: blob.contentType || payload.metadata.contentType,
-          size: blob.size || null
-        };
-        await onCompleted({ actor: payload.actor, metadata: payload.metadata, stored, blob });
       }
     });
   }

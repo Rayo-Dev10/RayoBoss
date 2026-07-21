@@ -11,6 +11,11 @@ const required = [
   'server/core/storage/storage-provider.js',
   'server/core/storage/local-disk-storage-provider.js',
   'server/core/storage/vercel-blob-storage-provider.js',
+  'server/core/media-library.js',
+  'server/core/playback-history.js',
+  'server/routes/reports.js',
+  'public/js/library-v4.js',
+  'public/js/reports-v4.js',
   'server/vercel-entry.js', 'api/index.js', 'package.json', 'package-lock.json', 'vercel.json'
 ];
 const forbidden = ['.env', 'data/state.json', '.vercel/project.json'];

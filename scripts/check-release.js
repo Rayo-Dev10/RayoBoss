@@ -6,9 +6,10 @@ const errors = [];
 const required = [
   'README.md', '.env.example', '.gitignore', 'package.json', 'package-lock.json', 'vercel.json',
   'api/index.js', 'server/vercel-entry.js', 'server/app.js', 'server/config.js',
+  'server/core/media-library.js', 'server/core/playback-history.js', 'server/routes/media.js', 'server/routes/reports.js',
   'server/core/storage/storage-factory.js', 'server/core/storage/storage-provider.js',
   'server/core/storage/local-disk-storage-provider.js', 'server/core/storage/vercel-blob-storage-provider.js',
-  'public/index.html', 'public/embed.html', 'public/js/blob-client.js'
+  'public/index.html', 'public/embed.html', 'public/js/blob-client.js', 'public/js/library-v4.js', 'public/js/reports-v4.js'
 ];
 for (const item of required) if (!fs.existsSync(path.join(root, item))) errors.push(`falta ${item}`);
 

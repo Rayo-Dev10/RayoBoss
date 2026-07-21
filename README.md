@@ -1,6 +1,6 @@
 # RayoBoss 4.0.1
 
-RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC, captura de cámara o pantalla, biblioteca de audio y video, AutoDJ programable mediante interfaz visual, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
+RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC, captura de cámara o pantalla, biblioteca audiovisual con metadatos y licencias, carga masiva, AutoDJ programable mediante interfaz visual, informe mensual de reproducción, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
 
 ## Requisitos
 
@@ -148,16 +148,36 @@ Escritura: habilitada
 | Vercel sin Blob | `vercel-demo-readonly` |
 | Vercel con Blob conectado | `vercel-blob` |
 
+La biblioteca confirma por separado la carga física y el alta en el catálogo. Si un archivo llegó a Blob pero la confirmación fue interrumpida, aparece en **Archivos por incorporar** para completar su ficha sin volver a cargarlo.
+
+## URLs de operación
+
+Después de iniciar sesión, cada módulo puede abrirse y compartirse internamente mediante una URL estable:
+
+```text
+/inicio
+/administrativo
+/en-vivo
+/biblioteca
+/programacion
+/informes
+/reproductor
+/diagnostico
+```
+
+La señal destinada a oyentes continúa separada en `/embed?autoplay=1`. El panel administrativo no carga ni reproduce esa señal al ingresar.
+
 ## Verificación manual mínima
 
 1. Abrir `/api/health`.
 2. Iniciar sesión como `dev`.
-3. Cargar un MP3 corto en Biblioteca.
-4. Crear una playlist desde la interfaz visual.
+3. Cargar un MP3 corto en Biblioteca y comprobar duración, metadatos y soporte de licencia.
+4. Crear una playlist desde la interfaz visual y confirmar que la pieza aparece sin recargar el despliegue.
 5. Asignarla a una franja.
 6. Abrir `/embed?autoplay=1` en otro dispositivo.
 7. Iniciar un vivo y comprobar audio o video desde un celular.
 8. Eliminar el archivo de prueba y confirmar que desaparece del Blob Store.
+9. Abrir `/informes` y exportar el consolidado mensual en CSV.
 
 ## Comandos útiles
 

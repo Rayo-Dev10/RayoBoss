@@ -28,6 +28,9 @@ Mantener copias fuera de la VPS. Respaldar también:
 - configuración Caddy/systemd;
 - archivos multimedia o bucket externo;
 - reportes de derechos.
+- `data/media-catalog.json` y `data/playback-history.json` en instalaciones locales o VPS.
+
+En Vercel, Runtime Cache permite la demostración del catálogo, la programación y el histórico mensual, pero no sustituye una base de datos transaccional ni un respaldo jurídico. Antes de operar institucionalmente, mover estos registros a PostgreSQL y definir retención, auditoría y copias externas.
 
 ## Recuperación
 

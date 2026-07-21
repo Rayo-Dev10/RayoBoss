@@ -1,5 +1,11 @@
 # Programación visual del AutoDJ
 
+Acceso directo:
+
+```text
+/programacion
+```
+
 ## 1. Roles
 
 - Desarrollador y administrador: crean y modifican programación.
@@ -17,6 +23,8 @@
 8. Mantener **Repetición continua** para continuidad permanente.
 
 Eliminar una pieza de una playlist no elimina el archivo de la biblioteca.
+
+Una carga aparece en este selector después de que la biblioteca confirma tanto el archivo físico como su ficha. Si el binario existe en Blob pero no aparece aquí, abre `/biblioteca` y revisa **Archivos por incorporar**.
 
 ## 3. Franjas
 

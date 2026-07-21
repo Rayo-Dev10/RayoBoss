@@ -17,6 +17,7 @@
   <button data-t="vivo">En vivo</button>
   <button data-t="media">Biblioteca</button>
   <button data-t="program">Programación</button>
+  <button data-t="reports">Informes</button>
   <button data-t="player">Reproductor público</button>
   <button data-t="diag">Diagnostico</button>
   <button id="btnSalir" class="salir">Salir</button>
@@ -148,7 +149,9 @@
 <section id="t-player" class="oculto">
   <div class="card">
     <h2>Reproductor público</h2>
-    <iframe id="publicFrame" src="/embed?autoplay=0" allow="autoplay; fullscreen" class="public-frame" title="Señal pública UNIOC Radio"></iframe>
+    <p class="sub">El panel administrativo no reproduce la señal automáticamente. Carga esta vista solo cuando quieras comprobar la experiencia de un oyente.</p>
+    <button class="btn" id="btnLoadPublicPlayer">Cargar reproductor de oyentes</button>
+    <iframe id="publicFrame" data-src="/embed?autoplay=0" allow="autoplay; fullscreen" class="public-frame oculto" title="Señal pública UNIOC Radio"></iframe>
     <div id="autoPlayer">
       <p class="sub">AutoDJ utiliza la señal WAV de continuidad. En Vercel cada conexion se renueva al alcanzar el tiempo configurado.</p>
       <audio id="au" controls preload="none" class="audio-player" src="/api/public/audio"></audio>
@@ -175,24 +178,94 @@
 
 
 <section id="t-media" class="oculto">
-  <div class="card">
-    <h2>Biblioteca multimedia</h2>
-    <p class="sub">Audio y video para AutoDJ y producción en vivo. “Producción y continuidad” reúne identificadores, cuñas, cortinillas y promos. El material temporal del vivo caduca en máximo 24 horas.</p>
-    <div class="form-grid">
-      <div><label for="mediaFile">Archivo</label><input id="mediaFile" type="file" accept="audio/*,video/*"></div>
-      <div><label for="mediaTitle">Título</label><input id="mediaTitle" maxlength="160"></div>
-      <div><label for="mediaCategory">Categoría</label><select id="mediaCategory"></select></div>
-      <div><label for="mediaSubtype">Tipo de producción</label><select id="mediaSubtype"><option value="">No aplica</option><option value="identificador">Identificador</option><option value="cuna">Cuña</option><option value="cortinilla">Cortinilla</option><option value="promo">Promo</option></select></div>
-      <div><label for="mediaDuration">Duración aproximada (segundos)</label><input id="mediaDuration" type="number" min="0.1" step="0.1" value="30"></div>
-      <div><label for="rightsBasis">Base de derechos/licencia</label><input id="rightsBasis" maxlength="240" placeholder="Creative Commons, autorización, producción propia…"></div>
-      <div><label for="rightsReference">Referencia o soporte</label><input id="rightsReference" maxlength="240"></div>
-      <div><label class="check"><input id="rightsConfirmed" type="checkbox"> Derechos confirmados para emisión</label></div>
+  <div class="library-hero">
+    <div><span class="eyebrow">Catálogo institucional</span><h1>Biblioteca multimedia</h1><p>Importa, escucha, documenta y administra las piezas que alimentan el AutoDJ y el estudio.</p></div>
+    <div class="library-stats" aria-label="Resumen de biblioteca">
+      <div><b id="mediaCount">0</b><span>piezas</span></div>
+      <div><b id="mediaMusicCount">0</b><span>musicales</span></div>
+      <div><b id="mediaLicenseCount">0</b><span>con soporte</span></div>
+      <div><b id="mediaDurationTotal">0 h</b><span>duración</span></div>
     </div>
-    <button class="btn" id="btnUploadMedia">Cargar archivo</button>
+  </div>
+
+  <div class="card upload-card">
+    <div class="section-heading-row"><div><h2>Incorporar contenidos</h2><p class="sub">Selecciona una pieza o hasta 200 archivos. RayoBoss comprueba el formato, obtiene la duración y lee metadatos ID3 disponibles.</p></div><span id="mediaProviderBadge" class="status-chip">Comprobando almacenamiento</span></div>
+    <label id="mediaDrop" class="media-drop" for="mediaFile">
+      <b>Arrastra audio o video aquí</b>
+      <span>o pulsa para seleccionar archivos · MP3, WAV, AAC, M4A, OGG, FLAC, OPUS, MP4, MOV o WebM</span>
+      <input id="mediaFile" type="file" accept="audio/*,video/*,.flac,.opus,.m4a,.mov" multiple class="visually-hidden">
+    </label>
+    <div id="mediaValidation" class="file-validation oculto" aria-live="polite"></div>
+    <div class="form-grid compact-form">
+      <div><label for="mediaCategory">Destino editorial</label><select id="mediaCategory"></select></div>
+      <div><label for="mediaSubtype">Tipo de producción</label><select id="mediaSubtype"><option value="">No aplica</option><option value="identificador">Identificador</option><option value="cuna">Cuña</option><option value="cortinilla">Cortinilla</option><option value="promo">Promoción</option></select></div>
+      <div><label for="licenseType">Tipo de licencia</label><select id="licenseType"></select></div>
+      <div><label for="licenseFile">Certificado o soporte opcional</label><input id="licenseFile" type="file" accept=".txt,.pdf,.jpg,.jpeg,.png,.webp,text/plain,application/pdf,image/*"></div>
+    </div>
+    <details id="mediaMetadataDetails" class="metadata-details">
+      <summary>Metadatos de la pieza seleccionada</summary>
+      <div class="form-grid">
+        <div><label for="mediaTitle">Título</label><input id="mediaTitle" maxlength="160"></div>
+        <div><label for="mediaArtist">Artista o intérprete</label><input id="mediaArtist" maxlength="160"></div>
+        <div><label for="mediaAlbum">Álbum o colección</label><input id="mediaAlbum" maxlength="160"></div>
+        <div><label for="mediaGenre">Género</label><input id="mediaGenre" maxlength="80"></div>
+        <div><label for="mediaYear">Año</label><input id="mediaYear" inputmode="numeric" maxlength="4"></div>
+        <div><label for="mediaIsrc">ISRC</label><input id="mediaIsrc" maxlength="20"></div>
+        <div><label for="mediaComposer">Autor o compositor</label><input id="mediaComposer" maxlength="160"></div>
+        <div><label for="mediaLabel">Sello o productor</label><input id="mediaLabel" maxlength="160"></div>
+        <div><label for="mediaDuration">Duración detectada</label><input id="mediaDuration" readonly placeholder="Se obtiene del archivo"></div>
+      </div>
+    </details>
+    <div class="form-grid compact-form">
+      <div><label for="rightsBasis">Base de derechos o licencia</label><input id="rightsBasis" maxlength="240" placeholder="Ej. Pixabay Content License"></div>
+      <div><label for="rightsReference">URL, contrato o referencia</label><input id="rightsReference" maxlength="240"></div>
+      <div class="wide-field"><label class="check"><input id="rightsConfirmed" type="checkbox"> Confirmo que la emisora puede usar este contenido al aire</label></div>
+    </div>
+    <div id="uploadQueue" class="upload-queue"></div>
+    <button class="btn" id="btnUploadMedia">Incorporar a la biblioteca</button>
     <progress id="uploadProgress" max="100" value="0" class="oculto"></progress>
     <div id="mediamsg" class="msg" aria-live="polite"></div>
   </div>
-  <div class="card"><h2>Contenido disponible</h2><div class="table-scroll"><table id="mediaTable"><thead><tr><th>Título</th><th>Categoría</th><th>Formato</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody></tbody></table></div></div>
+
+  <div id="orphanCard" class="card warning-card oculto">
+    <div class="section-heading-row"><div><h2>Archivos por incorporar</h2><p class="sub">Estos archivos existen en el almacenamiento, pero todavía no tienen una ficha de catálogo y por eso no aparecen en Programación.</p></div><button class="btn linea" id="btnRefreshOrphans">Volver a comprobar</button></div>
+    <div id="orphanList" class="orphan-list"></div>
+  </div>
+
+  <div class="card catalog-card">
+    <div class="section-heading-row"><div><h2>Contenido disponible</h2><p class="sub">Previsualiza cada pieza sin registrarla como emisión. Editar o reemplazar conserva su identidad dentro de las playlists.</p></div><button class="btn linea" id="btnRefreshMedia">Actualizar catálogo</button></div>
+    <div class="library-filters">
+      <input id="mediaSearch" type="search" placeholder="Buscar por título, artista, álbum o ISRC" aria-label="Buscar en la biblioteca">
+      <select id="mediaCategoryFilter" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select>
+      <select id="mediaStatusFilter" aria-label="Filtrar por estado"><option value="active">Activas</option><option value="all">Todas</option><option value="inactive">Inactivas</option><option value="license-missing">Sin soporte adjunto</option></select>
+    </div>
+    <div id="mediaGrid" class="media-grid"></div>
+  </div>
+
+  <input id="replaceMediaFile" type="file" accept="audio/*,video/*,.flac,.opus,.m4a,.mov" class="visually-hidden">
+  <dialog id="mediaEditor" class="media-dialog">
+    <div class="dialog-heading"><div><span class="eyebrow" id="editModeLabel">Ficha multimedia</span><h2 id="editHeading">Editar pieza</h2></div><button type="button" class="icon-close" id="btnCloseMediaEditor" aria-label="Cerrar">×</button></div>
+    <div class="form-grid">
+      <div><label for="editTitle">Título</label><input id="editTitle" maxlength="160"></div>
+      <div><label for="editArtist">Artista o intérprete</label><input id="editArtist" maxlength="160"></div>
+      <div><label for="editAlbum">Álbum o colección</label><input id="editAlbum" maxlength="160"></div>
+      <div><label for="editGenre">Género</label><input id="editGenre" maxlength="80"></div>
+      <div><label for="editYear">Año</label><input id="editYear" maxlength="4"></div>
+      <div><label for="editIsrc">ISRC</label><input id="editIsrc" maxlength="20"></div>
+      <div><label for="editComposer">Autor o compositor</label><input id="editComposer" maxlength="160"></div>
+      <div><label for="editLabel">Sello o productor</label><input id="editLabel" maxlength="160"></div>
+      <div><label for="editCategory">Destino editorial</label><select id="editCategory"></select></div>
+      <div><label for="editSubtype">Tipo de producción</label><select id="editSubtype"><option value="">No aplica</option><option value="identificador">Identificador</option><option value="cuna">Cuña</option><option value="cortinilla">Cortinilla</option><option value="promo">Promoción</option></select></div>
+      <div><label for="editLicenseType">Tipo de licencia</label><select id="editLicenseType"></select></div>
+      <div><label for="editLicenseFile">Adjuntar o reemplazar soporte</label><input id="editLicenseFile" type="file" accept=".txt,.pdf,.jpg,.jpeg,.png,.webp,text/plain,application/pdf,image/*"></div>
+      <div><label for="editRightsBasis">Base de derechos</label><input id="editRightsBasis" maxlength="240"></div>
+      <div><label for="editRightsReference">Referencia</label><input id="editRightsReference" maxlength="240"></div>
+      <div class="wide-field"><label for="editNotes">Notas internas</label><textarea id="editNotes" rows="3" maxlength="500"></textarea></div>
+      <div class="wide-field"><label class="check"><input id="editRightsConfirmed" type="checkbox"> Derechos confirmados para emisión</label></div>
+    </div>
+    <div id="editMediaMsg" class="msg" aria-live="polite"></div>
+    <div class="dialog-actions"><button type="button" class="btn linea" id="btnCancelMediaEditor">Cancelar</button><button type="button" class="btn" id="btnSaveMediaEditor">Guardar ficha</button></div>
+  </dialog>
 </section>
 
 <section id="t-program" class="oculto">
@@ -288,6 +361,29 @@
   </div>
 </section>
 
+<section id="t-reports" class="oculto">
+  <div class="card report-header">
+    <div><span class="eyebrow">Trazabilidad al aire</span><h1>Informe mensual de reproducción</h1><p class="sub">Consolida las piezas efectivamente iniciadas por el reproductor público o desde el estudio, junto con su licencia vigente al momento de sonar.</p></div>
+    <div class="report-controls"><label for="reportMonth">Mes</label><input id="reportMonth" type="month"><button class="btn" id="btnLoadReport">Consultar</button><button class="btn linea" id="btnExportReport">Descargar CSV</button></div>
+    <div id="reportmsg" class="msg" aria-live="polite"></div>
+  </div>
+  <div class="summary-grid report-summary">
+    <div class="card summary-card"><span>Reproducciones</span><b id="reportPlayCount">0</b><small>eventos únicos registrados</small></div>
+    <div class="card summary-card"><span>Piezas diferentes</span><b id="reportUniqueCount">0</b><small>repertorio del mes</small></div>
+    <div class="card summary-card"><span>Tiempo emitido</span><b id="reportDuration">0 h</b><small>duración acumulada</small></div>
+    <div class="card summary-card"><span>Licencias</span><b id="reportLicenseCount">0</b><small>tipos declarados</small></div>
+  </div>
+  <div class="card">
+    <h2>Consolidado por pieza y licencia</h2>
+    <div class="table-scroll"><table id="reportTable"><thead><tr><th>Pieza</th><th>Licencia</th><th>Soporte</th><th>Veces</th><th>Tiempo</th><th>Última reproducción</th></tr></thead><tbody></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Histórico del mes</h2>
+    <p class="sub">Cada ocurrencia de AutoDJ se registra una sola vez aunque existan varios oyentes conectados.</p>
+    <div id="reportTimeline" class="report-timeline"></div>
+  </div>
+</section>
+
 <section id="t-diag" class="oculto">
   <div class="card">
     <h2>Diagnostico del sistema</h2>
@@ -299,7 +395,9 @@
 <footer>RayoBoss 4.0.1 - Emisora institucional UNIOC · IES CINOC</footer>
 <script src="/js/blob-client.js"></script>
 <script src="/js/app.js"></script>
+<script src="/js/library-v4.js"></script>
 <script src="/js/studio-v4.js"></script>
 <script src="/js/programming-v4.js"></script>
+<script src="/js/reports-v4.js"></script>
 </body>
 </html>

@@ -2,6 +2,8 @@ const $ = id => document.getElementById(id);
 let manifest = null;
 let rtc = null;
 let currentKey = '';
+let playbackAuthorized = new URLSearchParams(location.search).get('autoplay') === '1';
+let reportedKey = '';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(url, options={}) {
   const response = await fetch(url, { ...options, cache:'no-store', headers:{'Content-Type':'application/json',...(options.headers||{})} });
@@ -15,13 +17,25 @@ function showMedia(kind) {
   $('poster').classList.toggle('hidden', Boolean(kind));
 }
 async function tryPlay(element) {
+  if (!playbackAuthorized) {
+    $('unlock').classList.remove('hidden');
+    $('status').textContent='La señal está lista. Pulsa Activar sonido cuando quieras escuchar.';
+    return;
+  }
   try { await element.play(); $('unlock').classList.add('hidden'); }
   catch (_) { $('unlock').classList.remove('hidden'); $('status').textContent='La señal está lista; este navegador exige una pulsación para activar audio audible.'; }
 }
 $('unlock').addEventListener('click', async()=>{
+  playbackAuthorized = true;
   const el = !$('video').classList.contains('hidden') ? $('video') : $('audio');
   await tryPlay(el);
 });
+async function reportPlayback() {
+  const key=manifest?.autodj?.playoutKey;
+  if(!key||reportedKey===key)return;
+  reportedKey=key;
+  await fetch('/api/public/playback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({playoutKey:key})}).catch(()=>{});
+}
 function closeRtc() {
   if (!rtc) return;
   clearInterval(rtc.timer);
@@ -83,6 +97,7 @@ async function startAutodj(data) {
   const el=item.kind==='video'?$('video'):$('audio'); const other=item.kind==='video'?$('audio'):$('video');
   other.pause(); other.removeAttribute('src'); other.srcObject=null;
   el.srcObject=null; el.src=item.url; el.loop=false;
+  el.onplay=reportPlayback;
   showMedia(item.kind); $('title').textContent=item.title; $('meta').textContent=`${data.autodj.playlist?.name||'AutoDJ'} · ${item.kind==='video'?'Audio y video':'Audio'}`;
   el.onloadedmetadata=async()=>{const offset=Math.max(0,Number(data.autodj.offsetSeconds)||0);if(Number.isFinite(el.duration)&&el.duration>0)el.currentTime=Math.min(offset,Math.max(0,el.duration-0.2));await tryPlay(el);};
   el.onended=()=>refresh(true); el.load(); $('status').textContent='AutoDJ programado por reloj.';
