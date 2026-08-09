@@ -14,7 +14,7 @@ router.post('/live/start', auth('desarrollador', 'administrador', 'locutor'), as
   res.json({ ok: true, status: await live.goLive(req.actor, title), streamUrl: '/api/live/stream' });
 }));
 router.post('/live/end', auth('desarrollador', 'administrador', 'locutor'), asyncRoute(async (req, res) => {
-  const result = await live.endLive();
+  const result = await live.endLive(req.actor);
   await Promise.all([
     microphones.expireBroadcast(result.endedBroadcastId),
     rtc.closeRoom(result.endedBroadcastId)

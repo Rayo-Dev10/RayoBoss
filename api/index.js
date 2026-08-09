@@ -6,7 +6,11 @@ var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
@@ -97,6 +101,12 @@ var require_default = __commonJS({
       storage: {
         provider: "auto",
         localPublicPath: "/media-files"
+      },
+      musicbrainz: {
+        baseUrl: "https://musicbrainz.org/ws/2",
+        contact: "https://github.com/Rayo-Dev10/RayoBoss",
+        requestIntervalMs: 1100,
+        cacheHours: 24
       }
     };
   }
@@ -213,6 +223,12 @@ var require_config = __commonJS({
       media: {
         maxUploadBytes: Math.min(5 * 1024 * 1024 * 1024, Math.max(1024 * 1024, envInt("RAYOBOSS_MAX_UPLOAD_MB", 500) * 1024 * 1024))
       },
+      musicbrainz: {
+        baseUrl: file.musicbrainz.baseUrl,
+        contact: envString("RAYOBOSS_MUSICBRAINZ_CONTACT", file.musicbrainz.contact),
+        requestIntervalMs: Math.max(1e3, envInt("RAYOBOSS_MUSICBRAINZ_INTERVAL_MS", file.musicbrainz.requestIntervalMs)),
+        cacheMs: Math.max(1, envInt("RAYOBOSS_MUSICBRAINZ_CACHE_HOURS", file.musicbrainz.cacheHours)) * 36e5
+      },
       storage: {
         provider: storageProvider,
         localRootDir: dataDir ? path.join(dataDir, "media") : null,
@@ -243,6 +259,10 @@ var require_config = __commonJS({
     assert(
       128 * cfg.auth.scryptN * cfg.auth.scryptR < cfg.auth.scryptMaxmem,
       "RAYOBOSS_SCRYPT_MAXMEM_MB es insuficiente para los parametros scrypt elegidos."
+    );
+    assert(
+      cfg.musicbrainz.contact.length >= 5 && cfg.musicbrainz.contact.length <= 240,
+      "RAYOBOSS_MUSICBRAINZ_CONTACT debe identificar un correo o URL de contacto."
     );
     module2.exports = cfg;
   }
@@ -1086,7 +1106,7 @@ var require_live = __commonJS({
     var cfg = require_config();
     var audio = require_audio();
     var runtimeStore = require_runtime_store();
-    var { badRequest } = require_errors();
+    var { badRequest, forbidden } = require_errors();
     var LIVE_KEY = "live-state";
     var localState = {
       live: false,
@@ -1139,8 +1159,11 @@ var require_live = __commonJS({
       await writeState(next);
       return formatStatus(next);
     }
-    async function endLive() {
+    async function endLive(actor) {
       const current = await readState();
+      if (current.live && actor && current.host !== actor.username && !["desarrollador", "administrador"].includes(actor.role)) {
+        forbidden("Solo el conductor principal o un administrador puede terminar este vivo. Puedes sumarte o desconectarte sin afectar la emisi\xF3n.");
+      }
       const endedBroadcastId = current.broadcastId;
       const next = {
         ...initialState(),
@@ -1581,10 +1604,11 @@ var require_rtc = __commonJS({
     }
     function createClient(kind, identity, liveStatus) {
       return mutate(async () => {
+        if (!["listener", "participant", "cohost"].includes(kind)) badRequest("Tipo de conexi\xF3n WebRTC inv\xE1lido.");
         const room = await loadRoom(liveStatus);
-        const currentCount = Object.values(room.clients).filter((client) => client.kind === kind).length;
+        const currentCount = Object.values(room.clients).filter((client) => kind === "listener" ? client.kind === "listener" : client.kind !== "listener").length;
         const limit = kind === "listener" ? cfg.rtc.maxListeners : cfg.rtc.maxParticipants;
-        if (currentCount >= limit) badRequest(`Se alcanzo el limite de ${limit} ${kind === "listener" ? "oyentes WebRTC" : "participantes"}.`);
+        if (currentCount >= limit) badRequest(`Se alcanz\xF3 el l\xEDmite de ${limit} ${kind === "listener" ? "oyentes WebRTC" : "micr\xF3fonos remotos"}.`);
         const id = crypto.randomBytes(12).toString("hex");
         const token = crypto.randomBytes(24).toString("base64url");
         room.clients[id] = {
@@ -1592,6 +1616,7 @@ var require_rtc = __commonJS({
           kind,
           username: identity.username || null,
           displayName: identity.displayName || identity.username || "Oyente",
+          role: identity.role || null,
           tokenHash: tokenHash(token),
           joinedAt: nowIso(),
           lastSeen: nowIso()
@@ -1627,6 +1652,7 @@ var require_rtc = __commonJS({
           kind: client.kind,
           username: client.username,
           displayName: client.displayName,
+          role: client.role,
           joinedAt: client.joinedAt
         }));
         const signals = (room.inboxes.host || []).splice(0);
@@ -1739,7 +1765,7 @@ var require_live2 = __commonJS({
       res.json({ ok: true, status: await live.goLive(req.actor, title), streamUrl: "/api/live/stream" });
     }));
     router.post("/live/end", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
-      const result = await live.endLive();
+      const result = await live.endLive(req.actor);
       await Promise.all([
         microphones.expireBroadcast(result.endedBroadcastId),
         rtc.closeRoom(result.endedBroadcastId)
@@ -1820,6 +1846,15 @@ var require_rtc2 = __commonJS({
         displayName: req.actor.username
       }, liveStatus) });
     }));
+    router.post("/rtc/cohosts/join", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
+      const liveStatus = await live.status();
+      if (liveStatus.host === req.actor.username) forbidden("El conductor principal ya opera el estudio de este vivo.");
+      res.json({ ok: true, session: await rtc.createClient("cohost", {
+        username: req.actor.username,
+        displayName: req.actor.username,
+        role: req.actor.role
+      }, liveStatus) });
+    }));
     router.get("/rtc/host/poll", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
       const liveStatus = await live.status();
       res.json(await rtc.pollHost(req.actor, liveStatus));
@@ -1858,6 +1893,131 @@ var require_rtc2 = __commonJS({
   }
 });
 
+// server/core/musicbrainz.js
+var require_musicbrainz = __commonJS({
+  "server/core/musicbrainz.js"(exports2, module2) {
+    var cfg = require_config();
+    var { badRequest } = require_errors();
+    var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    var cache = /* @__PURE__ */ new Map();
+    var fetchImplementation = (...args) => fetch(...args);
+    var queue = Promise.resolve();
+    var lastRequestAt = 0;
+    function optionalTerm(value, max = 160) {
+      const term = String(value || "").trim();
+      if (term.length > max || /[<>\r\n]/.test(term)) badRequest("La b\xFAsqueda de MusicBrainz contiene caracteres o una longitud no permitidos.");
+      return term;
+    }
+    function escapeQuery(value) {
+      return String(value).replace(/([+\-&|!(){}\[\]^"~*?:\\/])/g, "\\$1");
+    }
+    function buildQuery({ title, artist, isrc }) {
+      const safeTitle = optionalTerm(title);
+      const safeArtist = optionalTerm(artist);
+      const safeIsrc = optionalTerm(isrc, 20).toUpperCase();
+      if (!safeTitle && !safeArtist && !safeIsrc) badRequest("Escribe un t\xEDtulo, artista o ISRC para consultar MusicBrainz.");
+      const parts = [];
+      if (safeTitle) parts.push(`recording:"${escapeQuery(safeTitle)}"`);
+      if (safeArtist) parts.push(`artist:"${escapeQuery(safeArtist)}"`);
+      if (safeIsrc) parts.push(`isrc:${escapeQuery(safeIsrc)}`);
+      return parts.join(" AND ");
+    }
+    function textCredit(credits) {
+      return Array.isArray(credits) ? credits.map((credit) => `${credit.name || credit.artist?.name || ""}${credit.joinphrase || ""}`).join("").trim() : "";
+    }
+    function firstRelease(recording) {
+      const releases = Array.isArray(recording.releases) ? recording.releases : [];
+      return releases.find((release) => release?.status === "Official") || releases[0] || null;
+    }
+    function mapRecording(recording) {
+      const release = firstRelease(recording);
+      const artistCredits = Array.isArray(recording["artist-credit"]) ? recording["artist-credit"] : [];
+      const genres = (recording.genres || recording.tags || []).map((item) => item?.name).filter(Boolean).slice(0, 10);
+      const date = recording["first-release-date"] || release?.date || "";
+      return {
+        recordingId: recording.id,
+        title: String(recording.title || ""),
+        artist: textCredit(artistCredits),
+        artistIds: artistCredits.map((credit) => credit.artist?.id).filter((id) => UUID.test(String(id))).slice(0, 10),
+        album: String(release?.title || ""),
+        releaseId: UUID.test(String(release?.id || "")) ? release.id : "",
+        releaseGroupId: UUID.test(String(release?.["release-group"]?.id || "")) ? release["release-group"].id : "",
+        year: /^\d{4}/.test(date) ? date.slice(0, 4) : "",
+        isrc: String((recording.isrcs || [])[0] || "").toUpperCase(),
+        genre: genres.join("; "),
+        durationSeconds: Number.isFinite(Number(recording.length)) ? Math.round(Number(recording.length)) / 1e3 : null,
+        score: Number(recording.score || 0),
+        source: "musicbrainz",
+        picardUri: `mbid://track/${recording.id}`
+      };
+    }
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+    function scheduleRequest(run) {
+      const execute = async () => {
+        const delay = Math.max(0, cfg.musicbrainz.requestIntervalMs - (Date.now() - lastRequestAt));
+        if (delay) await wait(delay);
+        lastRequestAt = Date.now();
+        return run();
+      };
+      const pending = queue.then(execute, execute);
+      queue = pending.catch(() => {
+      });
+      return pending;
+    }
+    async function search(input = {}) {
+      const query = buildQuery(input);
+      const limit = Math.min(10, Math.max(1, Number.parseInt(input.limit, 10) || 8));
+      const cacheKey = `${query}|${limit}`;
+      const cached = cache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) return cached.value;
+      const url = new URL(`${cfg.musicbrainz.baseUrl}/recording`);
+      url.searchParams.set("query", query);
+      url.searchParams.set("fmt", "json");
+      url.searchParams.set("limit", String(limit));
+      const response = await scheduleRequest(() => fetchImplementation(url, {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": `RayoBoss/${cfg.version} ( ${cfg.musicbrainz.contact} )`
+        },
+        signal: AbortSignal.timeout(12e3)
+      }));
+      if (!response.ok) {
+        const error = new Error(response.status === 503 ? "MusicBrainz est\xE1 limitando temporalmente las consultas. Intenta nuevamente en unos segundos." : "MusicBrainz no respondi\xF3 correctamente.");
+        error.status = 502;
+        error.expose = true;
+        throw error;
+      }
+      const payload = await response.json();
+      const value = {
+        query,
+        items: (payload.recordings || []).filter((item) => UUID.test(String(item.id || ""))).map(mapRecording),
+        source: "MusicBrainz",
+        freeService: true
+      };
+      cache.set(cacheKey, { value, expiresAt: Date.now() + cfg.musicbrainz.cacheMs });
+      if (cache.size > 200) cache.delete(cache.keys().next().value);
+      return value;
+    }
+    module2.exports = {
+      search,
+      buildQuery,
+      mapRecording,
+      isValidMbid: (value) => UUID.test(String(value || "")),
+      _setFetchForTests: (fn) => {
+        fetchImplementation = fn || ((...args) => fetch(...args));
+      },
+      _resetForTests: () => {
+        cache.clear();
+        queue = Promise.resolve();
+        lastRequestAt = 0;
+        fetchImplementation = (...args) => fetch(...args);
+      }
+    };
+  }
+});
+
 // server/core/media-library.js
 var require_media_library = __commonJS({
   "server/core/media-library.js"(exports2, module2) {
@@ -1865,6 +2025,7 @@ var require_media_library = __commonJS({
     var crypto = require("crypto");
     var cfg = require_config();
     var runtimeStore = require_runtime_store();
+    var musicbrainz = require_musicbrainz();
     var { writePrimary, readRecoverable } = require_storage();
     var { badRequest, notFound, forbidden } = require_errors();
     var CATALOG_KEY = "media-catalog-v302";
@@ -1949,6 +2110,7 @@ var require_media_library = __commonJS({
           performer: String(item.performer || ""),
           recordLabel: String(item.recordLabel || ""),
           notes: String(item.notes || ""),
+          musicbrainz: item.musicbrainz && typeof item.musicbrainz === "object" ? item.musicbrainz : null,
           mediaType: item.mediaType || CATEGORIES[item.category]?.mediaType || "other",
           rights: {
             ...rights,
@@ -2031,6 +2193,28 @@ var require_media_library = __commonJS({
       if (Number(sizeBytes) > 25 * 1024 * 1024) badRequest("El soporte de licencia no puede superar 25 MB.");
       return { extension, contentType: mime || (extension === ".pdf" ? "application/pdf" : "text/plain") };
     }
+    function normalizeMusicBrainz(input, mediaType) {
+      if (!input) return null;
+      if (mediaType !== "music") badRequest("MusicBrainz solo se aplica a piezas catalogadas como m\xFAsica.");
+      if (typeof input !== "object" || Array.isArray(input)) badRequest("Metadatos MusicBrainz inv\xE1lidos.");
+      const recordingId = optionalText(input.recordingId, 40).toLowerCase();
+      if (!musicbrainz.isValidMbid(recordingId)) badRequest("El identificador de grabaci\xF3n MusicBrainz no es v\xE1lido.");
+      const releaseId = optionalText(input.releaseId, 40).toLowerCase();
+      const releaseGroupId = optionalText(input.releaseGroupId, 40).toLowerCase();
+      if (releaseId && !musicbrainz.isValidMbid(releaseId)) badRequest("El identificador de lanzamiento MusicBrainz no es v\xE1lido.");
+      if (releaseGroupId && !musicbrainz.isValidMbid(releaseGroupId)) badRequest("El identificador de grupo MusicBrainz no es v\xE1lido.");
+      const artistIds = Array.isArray(input.artistIds) ? input.artistIds.map((value) => String(value).toLowerCase()) : [];
+      if (artistIds.length > 10 || artistIds.some((value) => !musicbrainz.isValidMbid(value))) badRequest("Los identificadores de artista MusicBrainz no son v\xE1lidos.");
+      return {
+        recordingId,
+        releaseId: releaseId || null,
+        releaseGroupId: releaseGroupId || null,
+        artistIds,
+        source: input.source === "musicbrainz-picard" ? "musicbrainz-picard" : "musicbrainz",
+        matchedAt: input.matchedAt && !Number.isNaN(Date.parse(input.matchedAt)) ? new Date(input.matchedAt).toISOString() : nowIso(),
+        picardUri: `mbid://track/${recordingId}`
+      };
+    }
     function normalizeMetadata(input, actor) {
       const category = String(input.category || "");
       const categoryInfo = CATEGORIES[category];
@@ -2051,6 +2235,7 @@ var require_media_library = __commonJS({
       const isrc = optionalText(input.isrc, 20).toUpperCase();
       if (isrc && !/^[A-Z0-9-]{5,20}$/.test(isrc)) badRequest("El c\xF3digo ISRC no tiene un formato v\xE1lido.");
       const createdAt = nowIso();
+      const mediaType = categoryInfo.mediaType;
       return {
         id: id(),
         title: requiredText(input.title, "T\xEDtulo"),
@@ -2064,7 +2249,8 @@ var require_media_library = __commonJS({
         recordLabel: optionalText(input.recordLabel, 160),
         notes: optionalText(input.notes, 500),
         category,
-        mediaType: categoryInfo.mediaType,
+        mediaType,
+        musicbrainz: normalizeMusicBrainz(input.musicbrainz, mediaType),
         subtype: optionalText(input.subtype, 40) || null,
         kind,
         contentType,
@@ -2149,7 +2335,7 @@ var require_media_library = __commonJS({
           rightsReference: input.rightsReference == null ? item.rights?.reference : input.rightsReference
         };
         const normalized = normalizeMetadata(merged, actor);
-        for (const field of ["title", "artist", "album", "genre", "year", "isrc", "composer", "performer", "recordLabel", "notes", "category", "mediaType", "subtype", "durationSeconds", "expiresAt"]) {
+        for (const field of ["title", "artist", "album", "genre", "year", "isrc", "composer", "performer", "recordLabel", "notes", "category", "mediaType", "musicbrainz", "subtype", "durationSeconds", "expiresAt"]) {
           item[field] = normalized[field];
         }
         item.rights = { ...normalized.rights, document: item.rights?.document };
@@ -2209,6 +2395,7 @@ var require_media_library = __commonJS({
       normalizeMetadata,
       validateMediaDescriptor,
       validateLicenseDescriptor,
+      normalizeMusicBrainz,
       _resetForTests: () => {
         localCatalog = null;
         queue = Promise.resolve();
@@ -2692,6 +2879,7 @@ var require_media = __commonJS({
     var multer = require("multer");
     var cfg = require_config();
     var media = require_media_library();
+    var musicbrainz = require_musicbrainz();
     var validation = require_validation();
     var sessions = require_sessions();
     var users = require_users();
@@ -2780,6 +2968,15 @@ var require_media = __commonJS({
         licenseTypes: media.licenseTypes(),
         blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
       });
+    }));
+    router.get("/media/musicbrainz/search", auth("desarrollador", "administrador"), asyncRoute(async (req, res) => {
+      const result = await musicbrainz.search({
+        title: req.query.title,
+        artist: req.query.artist,
+        isrc: req.query.isrc,
+        limit: req.query.limit
+      });
+      res.json({ ok: true, ...result });
     }));
     router.get("/media", auth("desarrollador", "administrador", "locutor"), asyncRoute(async (req, res) => {
       res.json({

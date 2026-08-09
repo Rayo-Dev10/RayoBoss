@@ -52,8 +52,8 @@ La versión 4.0.1 es la referencia desde la cual deben partir todos los cambios.
 
 Datos técnicos principales:
 
-- Node.js: `22.x`.
-- Gestor declarado: `npm@10.9.2`.
+- Node.js: `24.x` LTS.
+- Gestor declarado: `pnpm@10.34.5` mediante Corepack.
 - Servidor: Express 4.
 - Estilo de módulos del servidor: CommonJS.
 - Build: esbuild.
@@ -65,7 +65,7 @@ Datos técnicos principales:
   - `esbuild`.
 - Versión declarada en `package.json`: `4.0.1`.
 - Versión declarada en `server/config.js`: `4.0.1`.
-- Suite base: **71 pruebas automatizadas** en `tests/test.js`.
+- Suite actual: **128 pruebas automatizadas** en `tests/test.js`.
 
 No cambies el número de versión salvo solicitud explícita del usuario o entrega formal acordada.
 
@@ -101,7 +101,8 @@ La experiencia oficial debe conservar este orden:
 3. Ejecutar:
 
 ```bash
-npm config set registry https://registry.npmjs.org/
+corepack enable
+pnpm config set registry https://registry.npmjs.org/
 bash scripts/windows-first-run.sh
 ```
 
@@ -109,7 +110,7 @@ bash scripts/windows-first-run.sh
 5. Ejecutar:
 
 ```bash
-npm start
+pnpm start
 ```
 
 6. Abrir `http://localhost:3000`.
@@ -190,6 +191,7 @@ Escritura: habilitada
 - `server/core/microphones.js`: solicitud, prueba, aprobación al aire y revocación.
 - `server/core/rtc.js`: señalización WebRTC.
 - `server/core/media-library.js`: catálogo y reglas de medios.
+- `server/core/musicbrainz.js`: búsqueda, caché y normalización de metadatos MusicBrainz/Picard.
 - `server/core/programming.js`: playlists, franjas, continuidad y resolución del AutoDJ.
 - `server/core/audio.js`: audio de demostración y frames.
 
@@ -283,7 +285,7 @@ En producción institucional, usuarios, programación, catálogo, auditoría y p
 
 ### Bundle serverless
 
-`npm run build` empaqueta `server/vercel-entry.js` y todos los módulos locales en `api/index.js` mediante esbuild. Las dependencias npm permanecen externas.
+`pnpm run build` empaqueta `server/vercel-entry.js` y todos los módulos locales en `api/index.js` mediante esbuild. Las dependencias permanecen externas.
 
 Esto evita que el empaquetador de Vercel omita módulos locales.
 
@@ -318,8 +320,8 @@ Reglas obligatorias:
 - no cambiar `/storage/` por `storage/`;
 - no cambiar nombres de módulos sin actualizar todos los imports;
 - respetar minúsculas y capitalización exacta;
-- ejecutar `npm run check:imports`;
-- ejecutar `npm run check:git` en un repositorio inicializado;
+- ejecutar `pnpm run check:imports`;
+- ejecutar `pnpm run check:git` en un repositorio inicializado;
 - confirmar que `server/core/storage/storage-factory.js` esté versionado.
 
 Linux y Vercel distinguen mayúsculas y minúsculas aunque Windows pueda ocultar el error.
@@ -605,6 +607,7 @@ POST /api/microphones/:id/revoke
 ```text
 POST /api/rtc/listeners/join
 POST /api/rtc/participants/join
+POST /api/rtc/cohosts/join
 GET  /api/rtc/host/poll
 POST /api/rtc/host/signal
 POST /api/rtc/clients/poll
@@ -622,6 +625,7 @@ DELETE /api/media/:id
 POST   /api/media/local-upload
 POST   /api/media/upload-plan
 POST   /api/media/blob-upload
+GET    /api/media/musicbrainz/search
 ```
 
 ### Programación
@@ -724,7 +728,7 @@ Al modificar variables:
 - Al agregar dependencia:
   - justificarla;
   - fijar versión razonable;
-  - actualizar `package-lock.json`;
+  - actualizar `pnpm-lock.yaml`;
   - ejecutar auditoría;
   - comprobar Vercel.
 - Separar responsabilidades:
@@ -736,7 +740,7 @@ Al modificar variables:
 - No editar archivos generados:
   - `api/index.js`;
   - `public/js/blob-client.js`.
-- Si se modifica `server/vercel-entry.js`, rutas, core o cliente Blob, ejecutar `npm run build`.
+- Si se modifica `server/vercel-entry.js`, rutas, core o cliente Blob, ejecutar `pnpm run build`.
 - Mantener mensajes de interfaz y errores en español claro.
 - Evitar jerga técnica visible al usuario final.
 - No usar emojis en la interfaz ni documentación técnica.
@@ -773,28 +777,28 @@ No reemplaces datos operativos reales con datos de prueba.
 Durante cambios pequeños:
 
 ```bash
-npm run build
-npm run check:imports
-npm test
-npm run doctor
+pnpm run build
+pnpm run check:imports
+pnpm test
+pnpm run doctor
 ```
 
 Antes de considerar una tarea terminada:
 
 ```bash
-npm run verify
+pnpm run verify
 ```
 
 Cuando haya acceso a internet y se vaya a publicar:
 
 ```bash
-npm run verify:full
+pnpm run verify:full
 ```
 
 En repositorio Git inicializado:
 
 ```bash
-npm run check:git
+pnpm run check:git
 ```
 
 La cadena completa verifica:
@@ -803,7 +807,7 @@ La cadena completa verifica:
 - bundle Vercel;
 - imports relativos;
 - capitalización;
-- 71 pruebas base o la cifra actualizada;
+- 128 pruebas actuales o la cifra actualizada;
 - configuración;
 - archivos críticos;
 - arranque simulado sin Blob;
@@ -969,7 +973,7 @@ Una tarea solo está terminada cuando:
 - no rompe roles ni seguridad;
 - los imports existen y respetan capitalización;
 - el bundle Vercel fue regenerado cuando corresponde;
-- las pruebas relevantes y `npm run verify` pasan;
+- las pruebas relevantes y `pnpm run verify` pasan;
 - Git no incluye secretos ni datos operativos;
 - la interfaz sigue siendo comprensible para no técnicos;
 - la documentación afectada está actualizada;

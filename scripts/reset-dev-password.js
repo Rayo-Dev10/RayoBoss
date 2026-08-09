@@ -10,7 +10,7 @@ const { writePrimary, readRecoverable } = require('../server/utils/storage');
   if (!cfg.dataDir) throw new Error('El restablecimiento solo está disponible en local/VPS, no en Vercel.');
   const stateFile = path.join(cfg.dataDir, 'state.json');
   const state = readRecoverable(stateFile);
-  if (!state) throw new Error('No existe data/state.json. Ejecute npm start una vez o elimine data para inicializarlo.');
+  if (!state) throw new Error('No existe data/state.json. Ejecute pnpm start una vez para inicializarlo.');
   const dev = state.users.find(u => u.username === cfg.auth.devUsername);
   if (!dev) throw new Error('No se encontró el usuario dev protegido.');
   dev.passwordHash = await users.hashPassword(cfg.auth.devPassword);

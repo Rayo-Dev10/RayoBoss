@@ -67,5 +67,11 @@
   "storage": {
     "provider": "auto",
     "localPublicPath": "/media-files"
+  },
+  "musicbrainz": {
+    "baseUrl": "https://musicbrainz.org/ws/2",
+    "contact": "https://github.com/Rayo-Dev10/RayoBoss",
+    "requestIntervalMs": 1100,
+    "cacheHours": 24
   }
 }

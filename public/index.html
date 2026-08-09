@@ -91,7 +91,7 @@
 <section id="t-vivo" class="oculto">
   <div class="card" id="hostCard">
     <h2>Consola de emision</h2>
-    <p class="sub">Al iniciar, el navegador solicita el microfono del conductor y crea el estudio WebRTC. El celular u otro oyente debe pulsar Escuchar vivo para recibir la señal.</p>
+    <p class="sub">Si no hay emisión, iniciarás el estudio principal. Si otro conductor ya está al aire, podrás sumarte con tu micrófono sin reemplazar ni terminar su señal.</p>
     <label for="vt">Titulo del programa</label><input id="vt" maxlength="120" placeholder="En vivo desde el campus">
     <button class="btn rojo" id="btnVivo">Iniciar vivo</button>
     <button class="btn linea oculto" id="btnFinVivo">Terminar vivo y regresar a AutoDJ</button>
@@ -128,8 +128,8 @@
     <div id="studiomsg" class="msg" aria-live="polite"></div>
   </div>
   <div class="card oculto" id="participantCard">
-    <h2>Participacion con microfono</h2>
-    <p class="sub">Disponible para periodistas e invitados solamente durante un programa en vivo.</p>
+    <h2 id="participantHeading">Participacion con microfono</h2>
+    <p class="sub" id="participantHelp">Disponible para periodistas e invitados solamente durante un programa en vivo.</p>
     <button class="btn naranja" id="btnRequestMic">Solicitar microfono</button>
     <button class="btn oculto" id="btnTestMic">Realizar prueba autorizada</button>
     <button class="btn rojo oculto" id="btnJoinMic">Conectar microfono al vivo</button>
@@ -215,6 +215,11 @@
         <div><label for="mediaLabel">Sello o productor</label><input id="mediaLabel" maxlength="160"></div>
         <div><label for="mediaDuration">Duración detectada</label><input id="mediaDuration" readonly placeholder="Se obtiene del archivo"></div>
       </div>
+      <div class="musicbrainz-actions">
+        <button type="button" class="btn linea" id="btnMusicBrainzUpload">Buscar metadatos en MusicBrainz</button>
+        <a id="musicBrainzUploadPicard" class="mini-btn oculto">Abrir coincidencia en Picard</a>
+        <span id="musicBrainzUploadState" class="sub">Disponible para piezas clasificadas como música, incluido video musical.</span>
+      </div>
     </details>
     <div class="form-grid compact-form">
       <div><label for="rightsBasis">Base de derechos o licencia</label><input id="rightsBasis" maxlength="240" placeholder="Ej. Pixabay Content License"></div>
@@ -254,6 +259,11 @@
       <div><label for="editIsrc">ISRC</label><input id="editIsrc" maxlength="20"></div>
       <div><label for="editComposer">Autor o compositor</label><input id="editComposer" maxlength="160"></div>
       <div><label for="editLabel">Sello o productor</label><input id="editLabel" maxlength="160"></div>
+      <div class="wide-field musicbrainz-actions">
+        <button type="button" class="btn linea" id="btnMusicBrainzEdit">Buscar metadatos en MusicBrainz</button>
+        <a id="musicBrainzEditPicard" class="mini-btn oculto">Abrir coincidencia en Picard</a>
+        <span id="musicBrainzEditState" class="sub"></span>
+      </div>
       <div><label for="editCategory">Destino editorial</label><select id="editCategory"></select></div>
       <div><label for="editSubtype">Tipo de producción</label><select id="editSubtype"><option value="">No aplica</option><option value="identificador">Identificador</option><option value="cuna">Cuña</option><option value="cortinilla">Cortinilla</option><option value="promo">Promoción</option></select></div>
       <div><label for="editLicenseType">Tipo de licencia</label><select id="editLicenseType"></select></div>
@@ -265,6 +275,12 @@
     </div>
     <div id="editMediaMsg" class="msg" aria-live="polite"></div>
     <div class="dialog-actions"><button type="button" class="btn linea" id="btnCancelMediaEditor">Cancelar</button><button type="button" class="btn" id="btnSaveMediaEditor">Guardar ficha</button></div>
+  </dialog>
+  <dialog id="musicBrainzDialog" class="media-dialog">
+    <div class="dialog-heading"><div><span class="eyebrow">Catálogo musical abierto</span><h2>Coincidencias de MusicBrainz</h2></div><button type="button" class="icon-close" id="btnCloseMusicBrainz" aria-label="Cerrar">×</button></div>
+    <p class="sub">Selecciona una coincidencia para completar la ficha. Confirma siempre que corresponda a la grabación y edición correctas antes de guardar.</p>
+    <div id="musicBrainzMsg" class="msg" aria-live="polite"></div>
+    <div id="musicBrainzResults" class="musicbrainz-results"></div>
   </dialog>
 </section>
 

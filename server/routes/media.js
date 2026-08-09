@@ -3,6 +3,7 @@ const router = require('express').Router();
 const multer = require('multer');
 const cfg = require('../config');
 const media = require('../core/media-library');
+const musicbrainz = require('../core/musicbrainz');
 const validation = require('../utils/validation');
 const sessions = require('../core/sessions');
 const users = require('../core/users');
@@ -88,6 +89,16 @@ router.get('/media/config', auth('desarrollador', 'administrador'), asyncRoute(a
     licenseTypes: media.licenseTypes(),
     blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
   });
+}));
+
+router.get('/media/musicbrainz/search', auth('desarrollador', 'administrador'), asyncRoute(async (req, res) => {
+  const result = await musicbrainz.search({
+    title: req.query.title,
+    artist: req.query.artist,
+    isrc: req.query.isrc,
+    limit: req.query.limit
+  });
+  res.json({ ok: true, ...result });
 }));
 
 router.get('/media', auth('desarrollador', 'administrador', 'locutor'), asyncRoute(async (req, res) => {

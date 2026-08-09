@@ -36,12 +36,26 @@ La duración no se escribe manualmente: el navegador la obtiene del archivo y el
 
 La comprobación técnica distingue audio y video. La condición de “música” es una clasificación editorial: se asigna al elegir `Música libre y no restrictiva` o `SAYCO-ACINPRO`; el sistema no pretende inferir derechos o naturaleza musical únicamente a partir de la forma de onda.
 
+## MusicBrainz y MusicBrainz Picard
+
+Las fichas clasificadas como música admiten enriquecimiento gratuito con MusicBrainz para audio y video musical. **Buscar metadatos en MusicBrainz** consulta por título, artista o ISRC y permite aplicar una coincidencia revisada por el usuario. Se conservan el MBID de grabación, lanzamiento, grupo de lanzamiento y artistas, además de un enlace `mbid://` para abrir la coincidencia en MusicBrainz Picard.
+
+Picard es una aplicación de escritorio guiada por el usuario, no un servicio serverless. El flujo recomendado es:
+
+1. etiquetar y guardar los archivos locales con MusicBrainz Picard cuando se requiera modificar el archivo maestro;
+2. subirlos a RayoBoss;
+3. dejar que la biblioteca lea las etiquetas ID3 y los identificadores MusicBrainz escritos por Picard;
+4. usar la búsqueda integrada para completar o corregir la ficha del catálogo, también en videos musicales.
+
+Las cargas masivas aprovechan etiquetas Picard ya existentes sin lanzar cientos de consultas. La consulta remota es manual, usa caché y respeta el máximo público de una solicitud por segundo. MusicBrainz no determina la licencia ni reemplaza la revisión jurídica.
+
 ## Carga masiva
 
 Puede seleccionarse un lote de hasta 200 archivos. RayoBoss:
 
 - analiza hasta cuatro archivos en paralelo;
 - conserva las etiquetas musicales detectadas por pieza;
+- importa MBID escritos por MusicBrainz Picard en archivos MP3;
 - carga hasta tres archivos simultáneamente;
 - muestra el estado individual de cada elemento;
 - permite que el resto del lote continúe cuando una pieza falla.

@@ -9,7 +9,17 @@
 5. Autorizar micrófono.
 6. Activar o reconectar el estudio si es necesario.
 
-Mientras existe un vivo, la interfaz oculta **Iniciar vivo** y muestra **Terminar vivo y regresar a AutoDJ**.
+Mientras existe un vivo, el conductor principal ve **Terminar vivo y regresar a AutoDJ**. Otro desarrollador, administrador o locutor autenticado ve **Sumarme al vivo**.
+
+## Coanfitriones autorizados
+
+1. El primer usuario autorizado inicia el vivo y conserva el estudio mezclador principal.
+2. Otro desarrollador, administrador o locutor abre **En vivo** y pulsa **Sumarme al vivo**.
+3. El navegador solicita su micrófono y crea una conexión WebRTC de coanfitrión dentro del mismo `broadcastId`.
+4. El estudio principal recibe y mezcla esa señal con el conductor, invitados, efectos y cama.
+5. El coanfitrión puede desconectarse sin terminar la emisión.
+
+Sumarse no cambia el título, la hora de inicio ni el conductor principal. El botón de cierre solo se muestra al conductor; desarrolladores y administradores conservan las facultades de emergencia disponibles en la API.
 
 ## Video
 

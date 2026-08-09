@@ -4,9 +4,9 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const errors = [];
 const required = [
-  'README.md', '.env.example', '.gitignore', 'package.json', 'package-lock.json', 'vercel.json',
+  'README.md', '.env.example', '.gitignore', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'vercel.json',
   'api/index.js', 'server/vercel-entry.js', 'server/app.js', 'server/config.js',
-  'server/core/media-library.js', 'server/core/playback-history.js', 'server/routes/media.js', 'server/routes/reports.js',
+  'server/core/media-library.js', 'server/core/musicbrainz.js', 'server/core/playback-history.js', 'server/routes/media.js', 'server/routes/reports.js',
   'server/core/storage/storage-factory.js', 'server/core/storage/storage-provider.js',
   'server/core/storage/local-disk-storage-provider.js', 'server/core/storage/vercel-blob-storage-provider.js',
   'public/index.html', 'public/embed.html', 'public/js/blob-client.js', 'public/js/library-v4.js', 'public/js/reports-v4.js'
@@ -14,9 +14,11 @@ const required = [
 for (const item of required) if (!fs.existsSync(path.join(root, item))) errors.push(`falta ${item}`);
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 if (pkg.version !== '4.0.1') errors.push(`package.json tiene versión ${pkg.version}`);
-if (lock.version !== '4.0.1' || lock.packages?.['']?.version !== '4.0.1') errors.push('package-lock.json no está sincronizado con 4.0.1');
+if (pkg.engines?.node !== '24.x') errors.push('package.json no exige Node.js 24.x');
+if (pkg.packageManager !== 'pnpm@10.34.5') errors.push('package.json no fija pnpm 10.34.5');
+const lock = fs.readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8');
+if (!lock.includes("lockfileVersion: '9.0'")) errors.push('pnpm-lock.yaml no usa el formato esperado de pnpm 10');
 
 const config = fs.readFileSync(path.join(root, 'server/config.js'), 'utf8');
 if (!config.includes("version: '4.0.1'")) errors.push('server/config.js no declara 4.0.1');

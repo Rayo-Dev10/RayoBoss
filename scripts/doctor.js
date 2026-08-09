@@ -16,7 +16,8 @@ const checks = [];
 function check(name, ok, detail = '') { checks.push({ name, ok: Boolean(ok), detail }); }
 const major = Number(process.versions.node.split('.')[0]);
 const storageInfo = storage.describe();
-check('Node.js >= 22', major >= 22, process.version);
+check('Node.js 24.x', major === 24, process.version);
+check('Gestor pnpm declarado', require('../package.json').packageManager === 'pnpm@10.34.5', require('../package.json').packageManager);
 check('RAYOBOSS_SECRET >= 32', cfg.auth.secret.length >= 32);
 check('Contraseña dev valida', cfg.auth.devPassword.length >= cfg.auth.minPasswordLength);
 check('Directorio public', fs.existsSync(path.join(root, 'public/index.html')));
@@ -27,6 +28,7 @@ check('Contrato StorageProvider', typeof storage.saveObject === 'function' && ty
 check('Modo de carga coherente', ['none', 'server', 'direct'].includes(storageInfo.uploadMode), storageInfo.uploadMode);
 check('Cliente Blob compilado', fs.existsSync(path.join(root, 'public/js/blob-client.js')));
 check('@vercel/functions disponible', (() => { try { require.resolve('@vercel/functions'); return true; } catch (_) { return false; } })());
+check('MusicBrainz identificado', Boolean(cfg.musicbrainz.contact), cfg.musicbrainz.contact);
 check('Vercel Blob opcional', true, storageInfo.provider === 'vercel-blob' ? 'configurado' : 'no configurado o no requerido');
 check('TURN opcional', true, cfg.rtc.iceServers.some(server => String(server.urls).startsWith('turn')) ? 'configurado' : 'no configurado; STUN solamente');
 if (cfg.dataDir) {

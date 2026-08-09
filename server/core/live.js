@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const cfg = require('../config');
 const audio = require('./audio');
 const runtimeStore = require('../utils/runtime-store');
-const { badRequest } = require('../utils/errors');
+const { badRequest, forbidden } = require('../utils/errors');
 
 const LIVE_KEY = 'live-state';
 const localState = {
@@ -61,8 +61,11 @@ async function goLive(actor, title) {
   return formatStatus(next);
 }
 
-async function endLive() {
+async function endLive(actor) {
   const current = await readState();
+  if (current.live && actor && current.host !== actor.username && !['desarrollador', 'administrador'].includes(actor.role)) {
+    forbidden('Solo el conductor principal o un administrador puede terminar este vivo. Puedes sumarte o desconectarte sin afectar la emisión.');
+  }
   const endedBroadcastId = current.broadcastId;
   const next = {
     ...initialState(),

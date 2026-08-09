@@ -1,12 +1,13 @@
 # RayoBoss 4.0.1
 
-RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC, captura de cámara o pantalla, biblioteca audiovisual con metadatos y licencias, carga masiva, AutoDJ programable mediante interfaz visual, informe mensual de reproducción, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
+RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC colaborativo, captura de cámara o pantalla, biblioteca audiovisual con metadatos MusicBrainz/Picard y licencias, carga masiva, AutoDJ programable mediante interfaz visual, informe mensual de reproducción, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
 
 ## Requisitos
 
 - Windows 10 u 11.
 - Git para Windows, con Git Bash.
-- Node.js 22 LTS.
+- Node.js 24 LTS.
+- Corepack y pnpm 10.34.5, fijado por el proyecto.
 - Cuenta de GitHub.
 - Cuenta de Vercel.
 
@@ -22,7 +23,8 @@ C:\Users\Rayo\Documents\GitHub\RayoBoss
 3. Ejecuta:
 
 ```bash
-npm config set registry https://registry.npmjs.org/
+corepack enable
+pnpm config set registry https://registry.npmjs.org/
 bash scripts/windows-first-run.sh
 ```
 
@@ -30,7 +32,7 @@ El script:
 
 - crea `.env` con secretos aleatorios;
 - muestra la contraseña inicial del usuario `dev` una sola vez;
-- instala exactamente las dependencias de `package-lock.json`;
+- instala exactamente las dependencias de `pnpm-lock.yaml`;
 - compila el cliente de Vercel Blob y la función serverless autocontenida;
 - comprueba todos los imports y su capitalización;
 - ejecuta las pruebas y el diagnóstico;
@@ -41,7 +43,7 @@ Guarda la contraseña mostrada fuera del repositorio.
 4. Inicia RayoBoss:
 
 ```bash
-npm start
+pnpm start
 ```
 
 5. Abre:
@@ -91,9 +93,9 @@ También confirma que `.env`, `data/`, `node_modules/` y `.vercel/` no estén ve
 `vercel.json` fija:
 
 ```text
-Install Command: npm ci
-Build Command: npm run build
-Node.js: 22.x mediante package.json
+Install Command: pnpm install --frozen-lockfile
+Build Command: pnpm run build
+Node.js: 24.x mediante package.json
 ```
 
 El primer despliegue debe funcionar sin Blob. Comprueba:
@@ -150,6 +152,14 @@ Escritura: habilitada
 
 La biblioteca confirma por separado la carga física y el alta en el catálogo. Si un archivo llegó a Blob pero la confirmación fue interrumpida, aparece en **Archivos por incorporar** para completar su ficha sin volver a cargarlo.
 
+Las piezas clasificadas como música, tanto audio como video musical, pueden consultar MusicBrainz para completar título, artista, lanzamiento, año, género, ISRC y sus identificadores estables. Los MP3 preparados con MusicBrainz Picard importan sus etiquetas MusicBrainz durante la carga y la ficha permite abrir la coincidencia nuevamente en Picard.
+
+## Política de gestores de paquetes
+
+pnpm 10 es el gestor principal para instalación, desarrollo, pruebas, compilación, auditoría y Vercel. El repositorio conserva un solo lockfile: `pnpm-lock.yaml`.
+
+npm no se utiliza para instalar dependencias del proyecto. Puede emplearse únicamente como mecanismo de bootstrap si una distribución de Node no incluye Corepack, o cuando una herramienta externa documente de forma explícita que un comando concreto requiere npm. Actualmente RayoBoss no incluye Capacitor ni otra integración que obligue a combinar gestores.
+
 ## URLs de operación
 
 Después de iniciar sesión, cada módulo puede abrirse y compartirse internamente mediante una URL estable:
@@ -175,19 +185,19 @@ La señal destinada a oyentes continúa separada en `/embed?autoplay=1`. El pane
 4. Crear una playlist desde la interfaz visual y confirmar que la pieza aparece sin recargar el despliegue.
 5. Asignarla a una franja.
 6. Abrir `/embed?autoplay=1` en otro dispositivo.
-7. Iniciar un vivo y comprobar audio o video desde un celular.
+7. Iniciar un vivo y comprobar audio o video desde un celular; con otra cuenta autorizada verificar **Sumarme al vivo** sin reemplazar la emisión.
 8. Eliminar el archivo de prueba y confirmar que desaparece del Blob Store.
 9. Abrir `/informes` y exportar el consolidado mensual en CSV.
 
 ## Comandos útiles
 
 ```bash
-npm start
-npm run verify
-npm run verify:full
-npm run doctor
-npm run check:git
-npm run reset-dev-password
+pnpm start
+pnpm run verify
+pnpm run verify:full
+pnpm run doctor
+pnpm run check:git
+pnpm run reset-dev-password
 ```
 
 ## Documentación

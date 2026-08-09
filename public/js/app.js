@@ -110,7 +110,7 @@ $('lp').addEventListener('keydown', event => { if (event.key === 'Enter') login(
 $('btnInvitado').addEventListener('click', requestGuest);
 $('btnCrearUsuario').addEventListener('click', createUser);
 $('btnClave').addEventListener('click', changePassword);
-$('btnVivo').addEventListener('click', startLive);
+$('btnVivo').addEventListener('click', handleLivePrimaryAction);
 $('btnFinVivo').addEventListener('click', endLive);
 $('btnStudio').addEventListener('click', () => startHostStudio(currentLive));
 $('btnStopStudio').addEventListener('click', stopHostStudio);
@@ -346,6 +346,12 @@ async function startLive() {
   }
 }
 
+async function handleLivePrimaryAction() {
+  const isHost = Boolean(currentUser && currentLive?.live && currentLive.host === currentUser.username);
+  if (currentLive?.live && !isHost) return startParticipantRtc({ cohost: true });
+  return startLive();
+}
+
 async function endLive() {
   try {
     await api('/api/live/end', { method: 'POST', body: JSON.stringify({}) });
@@ -465,7 +471,7 @@ function updateStudioCounters() {
   let participants = 0;
   for (const entry of hostStudio.peers.values()) {
     if (entry.kind === 'listener') listeners++;
-    if (entry.kind === 'participant') participants++;
+    if (entry.kind === 'participant' || entry.kind === 'cohost') participants++;
   }
   $('studioListeners').textContent = String(listeners);
   $('studioParticipants').textContent = String(participants);
@@ -676,15 +682,16 @@ async function stopListenerRtc(notify = true) {
   }
 }
 
-async function startParticipantRtc() {
+async function startParticipantRtc({ cohost = false } = {}) {
   let stream;
   try {
+    if (cohost) $('btnVivo').disabled = true;
     await stopParticipantRtc();
-    message('participantmsg', 'Solicitando el microfono y conectando con el estudio...', true);
+    message('participantmsg', cohost ? 'Solicitando el micrófono para sumarte al vivo existente…' : 'Solicitando el microfono y conectando con el estudio...', true);
     stream = await getMicrophone();
-    const result = await api('/api/rtc/participants/join', { method: 'POST', body: JSON.stringify({}) });
+    const result = await api(cohost ? '/api/rtc/cohosts/join' : '/api/rtc/participants/join', { method: 'POST', body: JSON.stringify({}) });
     const pc = createPeer(result.session.iceServers);
-    const client = newClientRtc('participant', result.session, pc, stream);
+    const client = newClientRtc(cohost ? 'cohost' : 'participant', result.session, pc, stream);
     participantRtc = client;
     pc.onicecandidate = event => {
       if (event.candidate) sendClientSignal(client.session, { type: 'candidate', payload: event.candidate.toJSON() }).catch(() => {});
@@ -702,7 +709,9 @@ async function startParticipantRtc() {
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
         client.connected = true;
-        message('participantmsg', 'Microfono conectado al vivo. El conductor puede escucharte y tu recibes su voz.', true);
+        message('participantmsg', cohost
+          ? 'Te sumaste al vivo. Tu señal se mezcla en el estudio principal y recibes el retorno del conductor.'
+          : 'Microfono conectado al vivo. El conductor puede escucharte y tu recibes su voz.', true);
       }
       if (['failed', 'closed', 'disconnected'].includes(pc.connectionState) && participantRtc === client) {
         message('participantmsg', 'La conexion de microfono se cerro. Solicita ayuda al administrador o reconecta.', false);
@@ -712,10 +721,13 @@ async function startParticipantRtc() {
     visible('btnJoinMic', false);
     visible('btnLeaveMic', true);
     await pollClientRtc(client);
+    updateLiveUi();
   } catch (error) {
     if (stream) stream.getTracks().forEach(track => track.stop());
     message('participantmsg', error.message, false);
     await stopParticipantRtc(false);
+  } finally {
+    if (cohost) $('btnVivo').disabled = false;
   }
 }
 
@@ -785,11 +797,22 @@ function updateLiveUi() {
   const broadcaster = roleIs('desarrollador', 'administrador', 'locutor');
   const isHost = Boolean(currentUser && status.live && status.host === currentUser.username);
   if (broadcaster) {
-    visible('btnVivo', !status.live);
-    visible('btnFinVivo', status.live);
+    const canJoin = status.live && !isHost && !participantRtc;
+    visible('btnVivo', !status.live || canJoin);
+    $('btnVivo').textContent = status.live ? 'Sumarme al vivo' : 'Iniciar vivo';
+    visible('btnFinVivo', status.live && isHost);
     visible('btnStudio', status.live && isHost && !hostStudio.active);
     visible('studioCard', status.live && isHost);
     $('vt').disabled = status.live;
+    visible('participantCard', status.live && !isHost);
+    if (status.live && !isHost) {
+      $('participantHeading').textContent = 'Participación en el vivo activo';
+      $('participantHelp').textContent = `Conduce ${status.host}. Al sumarte, tu micrófono se mezcla con la señal existente sin reemplazarla.`;
+      visible('btnRequestMic', false);
+      visible('btnTestMic', false);
+      visible('btnJoinMic', false);
+      visible('btnLeaveMic', Boolean(participantRtc));
+    }
   }
   if (hostStudio.active && (!status.live || !isHost)) stopHostStudio();
 
@@ -801,6 +824,8 @@ function updateLiveUi() {
 
   if (roleIs('periodista', 'invitado')) {
     visible('participantCard', true);
+    $('participantHeading').textContent = 'Participación con micrófono';
+    $('participantHelp').textContent = 'Disponible para periodistas e invitados solamente durante un programa en vivo.';
     const request = myMicrophoneRequest;
     visible('btnRequestMic', status.live && !request);
     visible('btnTestMic', status.live && Boolean(request) && ['test_approved', 'live_approved'].includes(request.state));

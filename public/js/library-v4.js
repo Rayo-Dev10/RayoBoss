@@ -1,6 +1,6 @@
 // Biblioteca visual RayoBoss 4.0.1: catálogo, metadatos, licencias y carga masiva.
 (() => {
-  const state = { items: [], config: null, orphans: [], queue: [], editor: null, replaceTarget: null, loading: null };
+  const state = { items: [], config: null, orphans: [], queue: [], editor: null, replaceTarget: null, loading: null, uploadMusicBrainz: null, musicBrainzTarget: null };
   const MEDIA_EXTENSIONS = new Set(['mp3', 'wav', 'aac', 'm4a', 'ogg', 'oga', 'flac', 'opus', 'mp4', 'm4v', 'webm', 'mov']);
   const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'webm', 'mov']);
 
@@ -61,6 +61,82 @@
     if (category === 'autodj.produccion') return 'produccion-propia';
     if (category === 'autodj.libre') return 'licencia-libre';
     return 'pendiente';
+  }
+  function setPicardLink(id, metadata) {
+    const link = $(id);
+    const uri = metadata?.picardUri || (metadata?.recordingId ? `mbid://track/${metadata.recordingId}` : '');
+    visible(id, Boolean(uri));
+    if (uri) link.href = uri;
+    else link.removeAttribute('href');
+  }
+  function musicBrainzMetadata(result) {
+    return {
+      recordingId: result.recordingId,
+      releaseId: result.releaseId || '',
+      releaseGroupId: result.releaseGroupId || '',
+      artistIds: result.artistIds || [],
+      source: 'musicbrainz',
+      matchedAt: new Date().toISOString(),
+      picardUri: result.picardUri
+    };
+  }
+  function metadataFields(target) {
+    const prefix = target === 'edit' ? 'edit' : 'media';
+    return {
+      title: $(`${prefix}Title`), artist: $(`${prefix}Artist`), album: $(`${prefix}Album`),
+      genre: $(`${prefix}Genre`), year: $(`${prefix}Year`), isrc: $(`${prefix}Isrc`)
+    };
+  }
+  function applyMusicBrainz(result) {
+    const target = state.musicBrainzTarget;
+    const fields = metadataFields(target);
+    for (const key of ['title', 'artist', 'album', 'genre', 'year', 'isrc']) if (result[key]) fields[key].value = result[key];
+    const metadata = musicBrainzMetadata(result);
+    if (target === 'edit') {
+      state.editor.musicbrainz = metadata;
+      $('musicBrainzEditState').textContent = `Grabación vinculada: ${metadata.recordingId}`;
+      setPicardLink('musicBrainzEditPicard', metadata);
+    } else {
+      state.uploadMusicBrainz = metadata;
+      $('musicBrainzUploadState').textContent = `Grabación vinculada: ${metadata.recordingId}`;
+      setPicardLink('musicBrainzUploadPicard', metadata);
+    }
+    $('musicBrainzDialog').close();
+  }
+  function renderMusicBrainzResults(items) {
+    const container = $('musicBrainzResults');
+    container.replaceChildren();
+    if (!items.length) {
+      container.append(element('p', 'empty-state', 'MusicBrainz no encontró coincidencias. Ajusta el título, artista o ISRC.'));
+      return;
+    }
+    for (const item of items) {
+      const row = element('div', 'musicbrainz-result');
+      const detail = element('div');
+      detail.append(element('b', '', item.title || 'Grabación sin título'));
+      detail.append(element('span', '', `${item.artist || 'Artista sin registrar'} · ${item.album || 'Lanzamiento sin registrar'}${item.year ? ` · ${item.year}` : ''}${item.isrc ? ` · ${item.isrc}` : ''}`));
+      row.append(detail, button('Usar estos metadatos', 'btn', () => applyMusicBrainz(item)));
+      container.append(row);
+    }
+  }
+  async function searchMusicBrainz(target) {
+    const categoryId = target === 'edit' ? 'editCategory' : 'mediaCategory';
+    if (state.config?.categories?.[$(categoryId).value]?.mediaType !== 'music') {
+      return message(target === 'edit' ? 'editMediaMsg' : 'mediamsg', 'MusicBrainz está disponible únicamente para piezas clasificadas como música.', false);
+    }
+    const fields = metadataFields(target);
+    const params = new URLSearchParams({ title: fields.title.value, artist: fields.artist.value, isrc: fields.isrc.value, limit: '8' });
+    state.musicBrainzTarget = target;
+    $('musicBrainzResults').replaceChildren();
+    message('musicBrainzMsg', 'Consultando el catálogo abierto de MusicBrainz…', true);
+    $('musicBrainzDialog').showModal();
+    try {
+      const result = await api(`/api/media/musicbrainz/search?${params}`);
+      message('musicBrainzMsg', `${result.items.length} coincidencia${result.items.length === 1 ? '' : 's'} encontrada${result.items.length === 1 ? '' : 's'}.`, true);
+      renderMusicBrainzResults(result.items || []);
+    } catch (error) {
+      message('musicBrainzMsg', error.message, false);
+    }
   }
   function updateCategoryUi() {
     const category = $('mediaCategory').value;
@@ -128,6 +204,22 @@
       return new TextDecoder(encoding === 3 ? 'utf-8' : 'iso-8859-1').decode(content).replace(/\0/g, '').trim();
     } catch (_) { return ''; }
   }
+  function decodeId3UserText(bytes) {
+    if (!bytes.length) return null;
+    const encoding = bytes[0];
+    const content = bytes.slice(1);
+    const wide = encoding === 1 || encoding === 2;
+    let separator = -1;
+    for (let index = 0; index < content.length; index += wide ? 2 : 1) {
+      if (content[index] === 0 && (!wide || content[index + 1] === 0)) { separator = index; break; }
+    }
+    if (separator < 0) return null;
+    const prefix = value => { const output = new Uint8Array(value.length + 1); output[0] = encoding; output.set(value, 1); return output; };
+    return {
+      description: decodeId3Text(prefix(content.slice(0, separator))),
+      value: decodeId3Text(prefix(content.slice(separator + (wide ? 2 : 1))))
+    };
+  }
   async function readId3(file) {
     if (extension(file.name) !== 'mp3') return {};
     const bytes = new Uint8Array(await file.slice(0, Math.min(file.size, 512 * 1024)).arrayBuffer());
@@ -143,7 +235,16 @@
       const sizeBytes = bytes.slice(offset + 4, offset + 8);
       const size = version === 4 ? synchsafe(sizeBytes) : new DataView(sizeBytes.buffer, sizeBytes.byteOffset, 4).getUint32(0);
       if (!size || offset + 10 + size > limit) break;
-      if (map[frame]) result[map[frame]] = decodeId3Text(bytes.slice(offset + 10, offset + 10 + size));
+      const frameBytes = bytes.slice(offset + 10, offset + 10 + size);
+      if (map[frame]) result[map[frame]] = decodeId3Text(frameBytes);
+      if (frame === 'TXXX') {
+        const custom = decodeId3UserText(frameBytes);
+        const name = custom?.description.toLowerCase().replace(/[^a-z]/g, '');
+        if (name === 'musicbrainztrackid') result.musicbrainzRecordingId = custom.value;
+        if (name === 'musicbrainzalbumid') result.musicbrainzReleaseId = custom.value;
+        if (name === 'musicbrainzreleasegroupid') result.musicbrainzReleaseGroupId = custom.value;
+        if (name === 'musicbrainzartistid') result.musicbrainzArtistIds = custom.value.split(/[;,/]+/).map(value => value.trim()).filter(Boolean);
+      }
       offset += 10 + size;
     }
     return result;
@@ -162,6 +263,9 @@
   }
   async function prepareFiles(fileList) {
     const files = [...fileList].slice(0, 200);
+    state.uploadMusicBrainz = null;
+    setPicardLink('musicBrainzUploadPicard', null);
+    $('musicBrainzUploadState').textContent = 'Disponible para piezas clasificadas como música, incluido video musical.';
     state.queue = files.map(file => ({ file, status: 'probing', progress: 0 }));
     renderQueue();
     await mapLimit(state.queue, 4, async entry => {
@@ -235,11 +339,24 @@
       licenseType: $('licenseType').value,
       rightsBasis: $('rightsBasis').value,
       rightsReference: $('rightsReference').value,
-      rightsConfirmed: $('rightsConfirmed').checked
+      rightsConfirmed: $('rightsConfirmed').checked,
+      musicbrainz: single ? (state.uploadMusicBrainz || (tags.musicbrainzRecordingId ? {
+        recordingId: tags.musicbrainzRecordingId,
+        releaseId: tags.musicbrainzReleaseId || '',
+        releaseGroupId: tags.musicbrainzReleaseGroupId || '',
+        artistIds: tags.musicbrainzArtistIds || [],
+        source: 'musicbrainz-picard'
+      } : null)) : (tags.musicbrainzRecordingId ? {
+        recordingId: tags.musicbrainzRecordingId,
+        releaseId: tags.musicbrainzReleaseId || '',
+        releaseGroupId: tags.musicbrainzReleaseGroupId || '',
+        artistIds: tags.musicbrainzArtistIds || [],
+        source: 'musicbrainz-picard'
+      } : null)
     };
   }
   async function directUpload(file, metadata, progress, assetType = 'media') {
-    if (typeof window.rayoBlobUpload !== 'function') throw new Error('El cliente de Vercel Blob no está compilado. Ejecuta npm run build.');
+    if (typeof window.rayoBlobUpload !== 'function') throw new Error('El cliente de Vercel Blob no está compilado. Ejecuta pnpm run build.');
     return window.rayoBlobUpload(file, metadata, progress, assetType);
   }
   async function uploadOne(entry, metadata, licenseFile = null, replaceItemId = '') {
@@ -321,7 +438,7 @@
   }
   function matchesFilters(item) {
     const query = $('mediaSearch').value.trim().toLocaleLowerCase('es');
-    const haystack = [item.title, item.artist, item.album, item.isrc, item.genre].join(' ').toLocaleLowerCase('es');
+    const haystack = [item.title, item.artist, item.album, item.isrc, item.genre, item.musicbrainz?.recordingId].join(' ').toLocaleLowerCase('es');
     if (query && !haystack.includes(query)) return false;
     if ($('mediaCategoryFilter').value && item.category !== $('mediaCategoryFilter').value) return false;
     const status = $('mediaStatusFilter').value;
@@ -341,6 +458,7 @@
     const body = element('div', 'media-card-body');
     const chips = element('div', 'media-chips');
     chips.append(element('span', 'chip', categoryLabel(item.category)), element('span', `chip ${item.active ? 'active' : 'inactive'}`, item.active ? 'Activa' : 'Inactiva'));
+    if (item.musicbrainz?.recordingId) chips.append(element('span', 'chip active', 'MusicBrainz'));
     body.append(chips, element('h3', '', item.title), element('p', 'media-artist', item.artist || 'Artista sin registrar'));
     const facts = element('dl', 'media-facts');
     for (const [label, value] of [['Duración', formatDuration(item.durationSeconds)], ['Álbum', item.album || '—'], ['ISRC', item.isrc || '—'], ['Licencia', licenseLabel(item.rights?.licenseType)]]) {
@@ -400,6 +518,9 @@
     for (const [id, value] of Object.entries(values)) $(id).value = value;
     $('editRightsConfirmed').checked = Boolean(rights.confirmed);
     $('editLicenseFile').value = '';
+    state.editor.musicbrainz = item.musicbrainz || null;
+    $('musicBrainzEditState').textContent = item.musicbrainz?.recordingId ? `Grabación vinculada: ${item.musicbrainz.recordingId}` : 'Sin coincidencia vinculada.';
+    setPicardLink('musicBrainzEditPicard', item.musicbrainz);
   }
   function editorMetadata() {
     return {
@@ -407,7 +528,8 @@
       year: $('editYear').value, isrc: $('editIsrc').value, composer: $('editComposer').value, recordLabel: $('editLabel').value,
       category: $('editCategory').value, subtype: $('editSubtype').value, licenseType: $('editLicenseType').value,
       rightsBasis: $('editRightsBasis').value, rightsReference: $('editRightsReference').value, rightsConfirmed: $('editRightsConfirmed').checked,
-      notes: $('editNotes').value, durationSeconds: state.editor.durationSeconds, contentType: state.editor.contentType
+      notes: $('editNotes').value, durationSeconds: state.editor.durationSeconds, contentType: state.editor.contentType,
+      musicbrainz: state.editor.musicbrainz
     };
   }
   function openEditor(item) {
@@ -486,7 +608,8 @@
         artist: item.artist || tags.artist || '', album: item.album || tags.album || '', genre: item.genre || tags.genre || '',
         year: item.year || tags.year || '', isrc: item.isrc || tags.isrc || '', composer: item.composer || tags.composer || '',
         recordLabel: item.recordLabel || tags.recordLabel || '', durationSeconds: probe.durationSeconds, contentType: probe.contentType,
-        licenseType: item.rights?.licenseType, rightsBasis: item.rights?.basis, rightsReference: item.rights?.reference, rightsConfirmed: item.rights?.confirmed
+        licenseType: item.rights?.licenseType, rightsBasis: item.rights?.basis, rightsReference: item.rights?.reference,
+        rightsConfirmed: item.rights?.confirmed, musicbrainz: item.musicbrainz || null
       };
       if (!confirm(`¿Reemplazar el archivo de “${item.title}” por “${file.name}”? La pieza conservará su lugar en las playlists.`)) return;
       state.queue = [entry]; renderQueue();
@@ -547,6 +670,9 @@
   $('btnCloseMediaEditor').addEventListener('click', () => $('mediaEditor').close());
   $('btnCancelMediaEditor').addEventListener('click', () => $('mediaEditor').close());
   $('btnSaveMediaEditor').addEventListener('click', saveEditor);
+  $('btnMusicBrainzUpload').addEventListener('click', () => searchMusicBrainz('upload'));
+  $('btnMusicBrainzEdit').addEventListener('click', () => searchMusicBrainz('edit'));
+  $('btnCloseMusicBrainz').addEventListener('click', () => $('musicBrainzDialog').close());
   document.addEventListener('rayoboss:section', event => { if (event.detail.section === 'media') load(true); });
 
   window.RayoLibraryV4 = { load, uploadSelected, get items() { return state.items; }, get config() { return state.config; } };

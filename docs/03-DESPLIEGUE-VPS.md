@@ -7,7 +7,8 @@ La VPS ejecutará RayoBoss como plano de control y, inicialmente, puede operar c
 ## 2. Requisitos del administrador de sistemas
 
 - Linux LTS actualizado.
-- Node.js 22.x instalado de forma global.
+- Node.js 24.x LTS instalado de forma global.
+- Corepack habilitado y pnpm 10.34.5 activado desde `package.json`.
 - Git, Caddy o Nginx y certificados HTTPS.
 - FFmpeg para validación y futura conversión de medios.
 - Subdominio y DNS.
@@ -20,7 +21,7 @@ Verificar:
 
 ```bash
 node --version
-npm --version
+pnpm --version
 git --version
 ffmpeg -version
 ```
@@ -32,9 +33,9 @@ sudo mkdir -p /opt/rayoboss
 sudo chown "$USER":"$USER" /opt/rayoboss
 git clone URL_PRIVADA /opt/rayoboss
 cd /opt/rayoboss
-npm ci
-npm run build
-npm test
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm test
 ```
 
 ## 4. Crear secretos de producción
@@ -115,8 +116,8 @@ Probar login, biblioteca, programación visual, AutoDJ, vivo y `/embed`.
 cd /opt/rayoboss
 sudo -u www-data bash scripts/backup.sh
 git pull --ff-only
-npm ci
-npm run verify
+pnpm install --frozen-lockfile
+pnpm run verify
 sudo systemctl restart rayoboss
 sudo systemctl status rayoboss
 ```

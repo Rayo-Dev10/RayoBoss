@@ -27,6 +27,7 @@ const cfg = require('../server/config');
 const storageFactory = require('../server/core/storage/storage-factory');
 const StorageProvider = require('../server/core/storage/storage-provider');
 const mediaLibrary = require('../server/core/media-library');
+const musicbrainz = require('../server/core/musicbrainz');
 const playbackHistory = require('../server/core/playback-history');
 
 let base;
@@ -350,10 +351,10 @@ async function test(name, fn) {
     assert.equal(result.body.error, 'Ruta no encontrada.');
   });
 
-  await test('34. Dependencias declaradas corresponden a Express 4.22 o superior', async () => {
-    const lock = require('../package-lock.json');
-    const version = lock.packages['node_modules/express'].version.split('.').map(Number);
-    assert.ok(version[0] > 4 || (version[0] === 4 && version[1] >= 22));
+  await test('34. Dependencias declaradas corresponden al stack Node 24 y Express 5', async () => {
+    const pkg = require('../package.json');
+    assert.equal(pkg.engines.node, '24.x');
+    assert.equal(pkg.dependencies.express, '5.2.1');
   });
 
 
@@ -446,10 +447,10 @@ async function test(name, fn) {
     assert.equal(clientPoll.body.signals[0].type, 'description');
   });
 
-  await test('43. Interfaz alterna Iniciar y Terminar segun el estado real', async () => {
+  await test('43. Interfaz alterna Iniciar, Sumarse y Terminar segun el estado real', async () => {
     const source = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
-    assert.ok(source.includes("visible('btnVivo', !status.live)"));
-    assert.ok(source.includes("visible('btnFinVivo', status.live)"));
+    assert.ok(source.includes("$('btnVivo').textContent = status.live ? 'Sumarme al vivo' : 'Iniciar vivo'"));
+    assert.ok(source.includes("visible('btnFinVivo', status.live && isHost)"));
     assert.ok(source.includes("$('lu').value = result.request.username"));
     assert.ok(source.includes("$('lp').focus()"));
   });
@@ -856,6 +857,342 @@ async function test(name, fn) {
       assert.equal('storageKey' in result.body.autodj.item, false);
       assert.equal('notes' in result.body.autodj.item, false);
     }
+  });
+
+  await test('79. Runtime de desarrollo exige exactamente Node.js 24', async () => {
+    const pkg = require('../package.json');
+    assert.equal(pkg.engines.node, '24.x');
+    assert.equal(Number(process.versions.node.split('.')[0]), 24);
+  });
+
+  await test('80. pnpm 10 es el gestor reproducible declarado', async () => {
+    assert.equal(require('../package.json').packageManager, 'pnpm@10.34.5');
+  });
+
+  await test('81. El repositorio usa un único lockfile de pnpm', async () => {
+    assert.equal(fs.existsSync(path.join(root, 'pnpm-lock.yaml')), true);
+    assert.equal(fs.existsSync(path.join(root, 'package-lock.json')), false);
+    assert.match(fs.readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8'), /lockfileVersion: '9\.0'/);
+  });
+
+  await test('82. Vercel instala y compila con pnpm congelado', async () => {
+    const vercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
+    assert.equal(vercel.installCommand, 'pnpm install --frozen-lockfile');
+    assert.equal(vercel.buildCommand, 'pnpm run build');
+  });
+
+  await test('83. Bundle serverless apunta a Node.js 24', async () => {
+    const source = fs.readFileSync(path.join(root, 'scripts/build-client.js'), 'utf8');
+    assert.ok(source.includes("target: ['node24']"));
+    assert.ok(source.includes('pnpm-lock.yaml'));
+  });
+
+  await test('84. Dependencias principales están fijadas en líneas modernas verificadas', async () => {
+    const dependencies = require('../package.json').dependencies;
+    assert.deepEqual(dependencies, {
+      '@vercel/blob': '2.7.0', '@vercel/functions': '3.9.1', esbuild: '0.28.2', express: '5.2.1', multer: '2.2.0'
+    });
+  });
+
+  await test('85. pnpm permite únicamente el postinstall requerido por esbuild', async () => {
+    const workspace = fs.readFileSync(path.join(root, 'pnpm-workspace.yaml'), 'utf8');
+    assert.match(workspace, /onlyBuiltDependencies:\s+\- esbuild/);
+  });
+
+  await test('86. Documentación operativa ya no exige Node.js 22', async () => {
+    const files = ['README.md', 'docs/00-DESPLIEGUE-DESDE-CERO.md', 'docs/01-INSTALACION-WINDOWS.md', 'docs/03-DESPLIEGUE-VPS.md'];
+    for (const file of files) assert.equal(fs.readFileSync(path.join(root, file), 'utf8').includes('Node.js 22'), false, file);
+  });
+
+  await test('87. Verificación de release exige pnpm y el módulo MusicBrainz', async () => {
+    const source = fs.readFileSync(path.join(root, 'scripts/check-release.js'), 'utf8');
+    assert.ok(source.includes("'pnpm-lock.yaml'"));
+    assert.ok(source.includes("'server/core/musicbrainz.js'"));
+    assert.equal(source.includes("'package-lock.json'"), false);
+  });
+
+  await test('88. Scripts de primera instalación validan Node 24 y pnpm', async () => {
+    for (const file of ['scripts/windows-first-run.sh', 'scripts/install.sh']) {
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      assert.ok(source.includes('Node.js 24.x'), file);
+      assert.ok(source.includes('pnpm install --frozen-lockfile'), file);
+      assert.equal(source.includes('npm ci'), false, file);
+    }
+  });
+
+  await test('89. MusicBrainz construye consultas específicas por título, artista e ISRC', async () => {
+    const query = musicbrainz.buildQuery({ title: 'Canción del campus', artist: 'Grupo UNIOC', isrc: 'COABC2600001' });
+    assert.match(query, /recording:"Canción del campus"/);
+    assert.match(query, /artist:"Grupo UNIOC"/);
+    assert.match(query, /isrc:COABC2600001/);
+  });
+
+  await test('90. MusicBrainz escapa operadores de su lenguaje de consulta', async () => {
+    const query = musicbrainz.buildQuery({ title: 'Sol + Luna: edición' });
+    assert.ok(query.includes('Sol \\+ Luna\\: edición'));
+  });
+
+  await test('91. MusicBrainz rechaza búsquedas vacías', async () => {
+    assert.throws(() => musicbrainz.buildQuery({}), /Escribe un título, artista o ISRC/);
+  });
+
+  await test('92. Validador reconoce un MBID canónico', async () => {
+    assert.equal(musicbrainz.isValidMbid('11111111-1111-4111-8111-111111111111'), true);
+  });
+
+  await test('93. Validador rechaza identificadores que no son MBID', async () => {
+    assert.equal(musicbrainz.isValidMbid('../grabacion'), false);
+  });
+
+  const recordingFixture = {
+    id: '11111111-1111-4111-8111-111111111111', title: 'Canción institucional', score: 98, length: 181250,
+    'first-release-date': '2026-07-21', isrcs: ['COABC2600001'], genres: [{ name: 'instrumental' }],
+    'artist-credit': [{ name: 'Artista UNIOC', artist: { id: '22222222-2222-4222-8222-222222222222', name: 'Artista UNIOC' } }],
+    releases: [
+      { id: '55555555-5555-4555-8555-555555555555', title: 'Edición promocional', status: 'Bootleg' },
+      { id: '33333333-3333-4333-8333-333333333333', title: 'Álbum oficial', status: 'Official', date: '2026-07-21', 'release-group': { id: '44444444-4444-4444-8444-444444444444' } }
+    ]
+  };
+
+  await test('94. MusicBrainz mapea título y crédito artístico', async () => {
+    const mapped = musicbrainz.mapRecording(recordingFixture);
+    assert.equal(mapped.title, 'Canción institucional');
+    assert.equal(mapped.artist, 'Artista UNIOC');
+  });
+
+  await test('95. MusicBrainz prioriza el lanzamiento oficial', async () => {
+    const mapped = musicbrainz.mapRecording(recordingFixture);
+    assert.equal(mapped.album, 'Álbum oficial');
+    assert.equal(mapped.releaseId, '33333333-3333-4333-8333-333333333333');
+  });
+
+  await test('96. MusicBrainz conserva género, año e ISRC', async () => {
+    const mapped = musicbrainz.mapRecording(recordingFixture);
+    assert.equal(mapped.genre, 'instrumental');
+    assert.equal(mapped.year, '2026');
+    assert.equal(mapped.isrc, 'COABC2600001');
+  });
+
+  await test('97. MusicBrainz convierte duración de milisegundos a segundos', async () => {
+    assert.equal(musicbrainz.mapRecording(recordingFixture).durationSeconds, 181.25);
+  });
+
+  await test('98. Coincidencia MusicBrainz genera URI compatible con Picard', async () => {
+    assert.equal(musicbrainz.mapRecording(recordingFixture).picardUri, 'mbid://track/11111111-1111-4111-8111-111111111111');
+  });
+
+  await test('99. Búsqueda descarta resultados con identificadores inválidos', async () => {
+    musicbrainz._resetForTests();
+    musicbrainz._setFetchForTests(async () => ({ ok: true, json: async () => ({ recordings: [{ id: 'invalido', title: 'No usar' }, recordingFixture] }) }));
+    const result = await musicbrainz.search({ title: 'Canción institucional' });
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].recordingId, recordingFixture.id);
+  });
+
+  await test('100. Cliente MusicBrainz envía identificación y contacto', async () => {
+    musicbrainz._resetForTests();
+    let headers;
+    musicbrainz._setFetchForTests(async (url, options) => { headers = options.headers; return { ok: true, json: async () => ({ recordings: [] }) }; });
+    await musicbrainz.search({ title: 'Identificación' });
+    assert.match(headers['User-Agent'], /^RayoBoss\/4\.0\.1/);
+    assert.ok(headers['User-Agent'].includes(cfg.musicbrainz.contact));
+  });
+
+  await test('101. Cliente MusicBrainz limita cada consulta a diez resultados', async () => {
+    musicbrainz._resetForTests();
+    let requested;
+    musicbrainz._setFetchForTests(async url => { requested = new URL(url); return { ok: true, json: async () => ({ recordings: [] }) }; });
+    await musicbrainz.search({ title: 'Límite', limit: 200 });
+    assert.equal(requested.searchParams.get('limit'), '10');
+  });
+
+  await test('102. Caché MusicBrainz evita consultas remotas duplicadas', async () => {
+    musicbrainz._resetForTests();
+    let calls = 0;
+    musicbrainz._setFetchForTests(async () => { calls++; return { ok: true, json: async () => ({ recordings: [recordingFixture] }) }; });
+    await musicbrainz.search({ title: 'Caché' });
+    await musicbrainz.search({ title: 'Caché' });
+    assert.equal(calls, 1);
+  });
+
+  await test('103. MusicBrainz traduce limitación remota a un error comprensible', async () => {
+    musicbrainz._resetForTests();
+    musicbrainz._setFetchForTests(async () => ({ ok: false, status: 503 }));
+    await assert.rejects(() => musicbrainz.search({ title: 'Servicio ocupado' }), /limitando temporalmente/);
+  });
+
+  await test('104. Endpoint MusicBrainz requiere sesión administrativa', async () => {
+    assert.equal((await request('GET', '/api/media/musicbrainz/search?title=Prueba')).status, 401);
+    assert.equal((await request('GET', '/api/media/musicbrainz/search?title=Prueba', null, 'journalist')).status, 403);
+  });
+
+  await test('105. Endpoint MusicBrainz valida términos obligatorios', async () => {
+    assert.equal((await request('GET', '/api/media/musicbrainz/search', null, 'devStorage')).status, 400);
+  });
+
+  await test('106. Endpoint MusicBrainz entrega coincidencias normalizadas', async () => {
+    musicbrainz._resetForTests();
+    musicbrainz._setFetchForTests(async () => ({ ok: true, json: async () => ({ recordings: [recordingFixture] }) }));
+    const result = await request('GET', '/api/media/musicbrainz/search?title=Cancion', null, 'devStorage');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.items[0].recordingId, recordingFixture.id);
+    assert.equal(result.body.items[0].picardUri.startsWith('mbid://track/'), true);
+  });
+
+  const musicMetadata = {
+    title: 'Video musical documentado', artist: 'Artista UNIOC', category: 'autodj.libre', durationSeconds: 180,
+    contentType: 'audio/mpeg', licenseType: 'licencia-libre', rightsConfirmed: true,
+    musicbrainz: {
+      recordingId: recordingFixture.id, releaseId: '33333333-3333-4333-8333-333333333333',
+      releaseGroupId: '44444444-4444-4444-8444-444444444444', artistIds: ['22222222-2222-4222-8222-222222222222']
+    }
+  };
+
+  await test('107. Biblioteca conserva metadatos integrales MusicBrainz', async () => {
+    const normalized = mediaLibrary.normalizeMetadata(musicMetadata, { username: 'dev' });
+    assert.equal(normalized.musicbrainz.recordingId, recordingFixture.id);
+    assert.equal(normalized.musicbrainz.artistIds.length, 1);
+  });
+
+  await test('108. Biblioteca distingue metadatos importados desde Picard', async () => {
+    const normalized = mediaLibrary.normalizeMetadata({ ...musicMetadata, musicbrainz: { ...musicMetadata.musicbrainz, source: 'musicbrainz-picard' } }, { username: 'dev' });
+    assert.equal(normalized.musicbrainz.source, 'musicbrainz-picard');
+  });
+
+  await test('109. Biblioteca rechaza MBID de grabación inválido', async () => {
+    assert.throws(() => mediaLibrary.normalizeMetadata({ ...musicMetadata, musicbrainz: { recordingId: 'invalido' } }, { username: 'dev' }), /grabación MusicBrainz/);
+  });
+
+  await test('110. Biblioteca rechaza MBID de artista inválido', async () => {
+    assert.throws(() => mediaLibrary.normalizeMetadata({ ...musicMetadata, musicbrainz: { recordingId: recordingFixture.id, artistIds: ['invalido'] } }, { username: 'dev' }), /identificadores de artista/);
+  });
+
+  await test('111. MusicBrainz no se adjunta a piezas editoriales no musicales', async () => {
+    assert.throws(() => mediaLibrary.normalizeMetadata({ ...musicMetadata, category: 'autodj.produccion' }, { username: 'dev' }), /solo se aplica a piezas catalogadas como música/);
+  });
+
+  await test('112. Biblioteca admite MusicBrainz en video musical', async () => {
+    const normalized = mediaLibrary.normalizeMetadata({ ...musicMetadata, contentType: 'video/mp4' }, { username: 'dev' });
+    assert.equal(normalized.kind, 'video');
+    assert.equal(normalized.mediaType, 'music');
+    assert.equal(normalized.musicbrainz.recordingId, recordingFixture.id);
+  });
+
+  await test('113. Biblioteca expone controles humanos de MusicBrainz y Picard', async () => {
+    const html = fs.readFileSync(path.join(root, 'public/index.html'), 'utf8');
+    assert.ok(html.includes('btnMusicBrainzUpload'));
+    assert.ok(html.includes('btnMusicBrainzEdit'));
+    assert.ok(html.includes('musicBrainzDialog'));
+    assert.ok(html.includes('Abrir coincidencia en Picard'));
+  });
+
+  await test('114. Cliente de biblioteca lee etiquetas Picard sin introducir innerHTML', async () => {
+    const source = fs.readFileSync(path.join(root, 'public/js/library-v4.js'), 'utf8');
+    assert.equal(source.includes('innerHTML'), false);
+    assert.ok(source.includes("name === 'musicbrainztrackid'"));
+    assert.ok(source.includes('mbid://track/'));
+  });
+
+  await test('115. Un usuario anónimo no puede sumarse como coanfitrión', async () => {
+    assert.equal((await request('POST', '/api/rtc/cohosts/join', {})).status, 401);
+  });
+
+  await test('116. Invitados y periodistas no eluden la aprobación usando coanfitrión', async () => {
+    assert.equal((await request('POST', '/api/rtc/cohosts/join', {}, 'guest2')).status, 403);
+    assert.equal((await request('POST', '/api/rtc/cohosts/join', {}, 'journalist')).status, 403);
+  });
+
+  await test('117. El conductor principal no abre una segunda conexión de coanfitrión', async () => {
+    await request('POST', '/api/users', { username: 'cohostadmin', password: 'Cohost-Admin-Password-2026', role: 'administrador' }, 'devStorage');
+    await request('POST', '/api/users', { username: 'cohostlocutor', password: 'Cohost-Locutor-Password-2026', role: 'locutor' }, 'devStorage');
+    assert.equal((await request('POST', '/api/login', { username: 'cohostadmin', password: 'Cohost-Admin-Password-2026' }, 'cohostAdmin')).status, 200);
+    assert.equal((await request('POST', '/api/login', { username: 'cohostlocutor', password: 'Cohost-Locutor-Password-2026' }, 'cohostLocutor')).status, 200);
+    await request('POST', '/api/live/end', {}, 'devStorage');
+    assert.equal((await request('POST', '/api/live/start', { title: 'Vivo colaborativo' }, 'devStorage')).status, 200);
+    const status = await request('GET', '/api/live/status');
+    assert.equal(status.body.host, 'dev');
+    assert.equal((await request('POST', '/api/rtc/cohosts/join', {}, 'devStorage')).status, 403);
+  });
+
+  let cohostSession;
+  await test('118. Administrador autorizado se suma al vivo existente', async () => {
+    const before = await request('GET', '/api/live/status');
+    const result = await request('POST', '/api/rtc/cohosts/join', {}, 'cohostAdmin');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.session.broadcastId, before.body.broadcastId);
+    cohostSession = result.body.session;
+  });
+
+  await test('119. Sumarse conserva conductor, inicio y broadcastId', async () => {
+    const status = (await request('GET', '/api/live/status')).body;
+    assert.equal(status.host, 'dev');
+    assert.ok(status.startedAt);
+    assert.equal(status.broadcastId, cohostSession.broadcastId);
+  });
+
+  await test('120. Estudio principal recibe al coanfitrión con rol identificable', async () => {
+    const poll = await request('GET', '/api/rtc/host/poll', null, 'devStorage');
+    assert.equal(poll.status, 200, JSON.stringify(poll.body));
+    const joined = poll.body.joins.find(item => item.id === cohostSession.connectionId);
+    assert.equal(joined.kind, 'cohost');
+    assert.equal(joined.username, 'cohostadmin');
+    assert.equal(joined.role, 'administrador');
+  });
+
+  await test('121. Coanfitrión puede señalizar hacia el estudio principal', async () => {
+    const signal = { type: 'candidate', payload: { candidate: 'candidate:cohost' } };
+    assert.equal((await request('POST', '/api/rtc/clients/signal', {
+      connectionId: cohostSession.connectionId, token: cohostSession.token, signal
+    })).status, 200);
+    const poll = await request('GET', '/api/rtc/host/poll', null, 'devStorage');
+    assert.equal(poll.status, 200, JSON.stringify(poll.body));
+    assert.ok(poll.body.signals.some(item => item.from === cohostSession.connectionId && item.kind === 'cohost'));
+  });
+
+  await test('122. Otro usuario autorizado no reemplaza un vivo en curso', async () => {
+    const before = (await request('GET', '/api/live/status')).body;
+    assert.equal((await request('POST', '/api/live/start', { title: 'Intento de reemplazo' }, 'cohostAdmin')).status, 400);
+    assert.equal((await request('POST', '/api/live/end', {}, 'cohostLocutor')).status, 403);
+    const after = (await request('GET', '/api/live/status')).body;
+    assert.equal(after.broadcastId, before.broadcastId);
+    assert.equal(after.host, before.host);
+  });
+
+  await test('123. Locutor también puede sumarse sin solicitud de micrófono', async () => {
+    const result = await request('POST', '/api/rtc/cohosts/join', {}, 'cohostLocutor');
+    assert.equal(result.status, 200);
+    assert.equal(result.body.session.broadcastId, cohostSession.broadcastId);
+  });
+
+  await test('124. Interfaz presenta literalmente Sumarse al vivo', async () => {
+    const source = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+    assert.ok(source.includes("status.live ? 'Sumarme al vivo' : 'Iniciar vivo'"));
+    assert.ok(source.includes("'/api/rtc/cohosts/join'"));
+  });
+
+  await test('125. Botón Terminar vivo permanece reservado al conductor visible', async () => {
+    const source = fs.readFileSync(path.join(root, 'public/js/app.js'), 'utf8');
+    assert.ok(source.includes("visible('btnFinVivo', status.live && isHost)"));
+  });
+
+  await test('126. Límite RTC comparte cupo entre participantes y coanfitriones', async () => {
+    const source = fs.readFileSync(path.join(root, 'server/core/rtc.js'), 'utf8');
+    assert.ok(source.includes("client.kind !== 'listener'"));
+    assert.ok(source.includes("['listener', 'participant', 'cohost']"));
+  });
+
+  await test('127. Ruta coanfitrión exige roles de emisión', async () => {
+    const source = fs.readFileSync(path.join(root, 'server/routes/rtc.js'), 'utf8');
+    assert.ok(source.includes("'/rtc/cohosts/join', auth('desarrollador', 'administrador', 'locutor')"));
+  });
+
+  await test('128. Documentación describe MusicBrainz, Picard, pnpm y coanfitriones', async () => {
+    const libraryDoc = fs.readFileSync(path.join(root, 'docs/05-BIBLIOTECA-Y-DERECHOS.md'), 'utf8');
+    const liveDoc = fs.readFileSync(path.join(root, 'docs/06-OPERACION-EN-VIVO.md'), 'utf8');
+    const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+    assert.match(libraryDoc, /MusicBrainz Picard/);
+    assert.match(liveDoc, /Sumarme al vivo/);
+    assert.match(readme, /pnpm 10/);
   });
 
   server.close();

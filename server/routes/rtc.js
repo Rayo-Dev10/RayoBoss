@@ -22,6 +22,16 @@ router.post('/rtc/participants/join', auth('invitado', 'periodista'), asyncRoute
   }, liveStatus) });
 }));
 
+router.post('/rtc/cohosts/join', auth('desarrollador', 'administrador', 'locutor'), asyncRoute(async (req, res) => {
+  const liveStatus = await live.status();
+  if (liveStatus.host === req.actor.username) forbidden('El conductor principal ya opera el estudio de este vivo.');
+  res.json({ ok: true, session: await rtc.createClient('cohost', {
+    username: req.actor.username,
+    displayName: req.actor.username,
+    role: req.actor.role
+  }, liveStatus) });
+}));
+
 router.get('/rtc/host/poll', auth('desarrollador', 'administrador', 'locutor'), asyncRoute(async (req, res) => {
   const liveStatus = await live.status();
   res.json(await rtc.pollHost(req.actor, liveStatus));

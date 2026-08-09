@@ -76,10 +76,13 @@ function publicIceServers() {
 
 function createClient(kind, identity, liveStatus) {
   return mutate(async () => {
+    if (!['listener', 'participant', 'cohost'].includes(kind)) badRequest('Tipo de conexión WebRTC inválido.');
     const room = await loadRoom(liveStatus);
-    const currentCount = Object.values(room.clients).filter(client => client.kind === kind).length;
+    const currentCount = Object.values(room.clients).filter(client => kind === 'listener'
+      ? client.kind === 'listener'
+      : client.kind !== 'listener').length;
     const limit = kind === 'listener' ? cfg.rtc.maxListeners : cfg.rtc.maxParticipants;
-    if (currentCount >= limit) badRequest(`Se alcanzo el limite de ${limit} ${kind === 'listener' ? 'oyentes WebRTC' : 'participantes'}.`);
+    if (currentCount >= limit) badRequest(`Se alcanzó el límite de ${limit} ${kind === 'listener' ? 'oyentes WebRTC' : 'micrófonos remotos'}.`);
     const id = crypto.randomBytes(12).toString('hex');
     const token = crypto.randomBytes(24).toString('base64url');
     room.clients[id] = {
@@ -87,6 +90,7 @@ function createClient(kind, identity, liveStatus) {
       kind,
       username: identity.username || null,
       displayName: identity.displayName || identity.username || 'Oyente',
+      role: identity.role || null,
       tokenHash: tokenHash(token),
       joinedAt: nowIso(),
       lastSeen: nowIso()
@@ -125,6 +129,7 @@ function pollHost(actor, liveStatus) {
       kind: client.kind,
       username: client.username,
       displayName: client.displayName,
+      role: client.role,
       joinedAt: client.joinedAt
     }));
     const signals = (room.inboxes.host || []).splice(0);

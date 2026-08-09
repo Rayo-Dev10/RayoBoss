@@ -11,4 +11,4 @@ mkdir -p data
 if [[ -f data/state.json ]]; then cp -p data/state.json "data/state.pre-restore-$(date +%Y%m%d-%H%M%S).json"; fi
 tar -xzf "$ARCHIVE"
 chmod 600 data/state.json data/state.json.bak 2>/dev/null || true
-echo "Datos restaurados. Reinicia RayoBoss y ejecuta npm test."
+echo "Datos restaurados. Reinicia RayoBoss y ejecuta pnpm test."

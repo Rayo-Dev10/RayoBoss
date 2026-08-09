@@ -2,19 +2,20 @@
 
 ## Secuencia recomendada
 
-1. Instalar Git para Windows y Node.js 22 LTS.
+1. Instalar Git para Windows y Node.js 24 LTS.
 2. Reiniciar Windows.
 3. Descomprimir RayoBoss en una carpeta nueva.
 4. Abrir Git Bash en la raíz.
 5. Ejecutar la preparación automática:
 
 ```bash
-npm config set registry https://registry.npmjs.org/
+corepack enable
+pnpm config set registry https://registry.npmjs.org/
 bash scripts/windows-first-run.sh
 ```
 
 6. Guardar la contraseña de `dev` mostrada por el script.
-7. Ejecutar `npm start` y validar `http://localhost:3000`.
+7. Ejecutar `pnpm start` y validar `http://localhost:3000`.
 8. Crear un repositorio privado y vacío en GitHub.
 9. Publicar con:
 

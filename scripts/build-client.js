@@ -20,14 +20,14 @@ esbuild.buildSync({
 });
 
 // Empaqueta todos los módulos locales del servidor en una sola función.
-// Las dependencias de npm permanecen externas y Vercel las instala desde package-lock.json.
+// Las dependencias permanecen externas y Vercel las instala desde pnpm-lock.yaml.
 esbuild.buildSync({
   entryPoints: [path.join(root, 'server', 'vercel-entry.js')],
   bundle: true,
   minify: false,
   format: 'cjs',
   platform: 'node',
-  target: ['node22'],
+  target: ['node24'],
   packages: 'external',
   outfile: path.join(apiDir, 'index.js'),
   banner: { js: '// RayoBoss 4.0.1 - bundle Vercel generado; no editar manualmente.' },

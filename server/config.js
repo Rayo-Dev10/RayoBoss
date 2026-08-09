@@ -104,6 +104,12 @@ const cfg = {
   media: {
     maxUploadBytes: Math.min(5 * 1024 * 1024 * 1024, Math.max(1024 * 1024, envInt('RAYOBOSS_MAX_UPLOAD_MB', 500) * 1024 * 1024))
   },
+  musicbrainz: {
+    baseUrl: file.musicbrainz.baseUrl,
+    contact: envString('RAYOBOSS_MUSICBRAINZ_CONTACT', file.musicbrainz.contact),
+    requestIntervalMs: Math.max(1000, envInt('RAYOBOSS_MUSICBRAINZ_INTERVAL_MS', file.musicbrainz.requestIntervalMs)),
+    cacheMs: Math.max(1, envInt('RAYOBOSS_MUSICBRAINZ_CACHE_HOURS', file.musicbrainz.cacheHours)) * 3600_000
+  },
   storage: {
     provider: storageProvider,
     localRootDir: dataDir ? path.join(dataDir, 'media') : null,
@@ -128,5 +134,7 @@ assert(cfg.auth.scryptR >= 1 && cfg.auth.scryptR <= 32, 'RAYOBOSS_SCRYPT_R inval
 assert(cfg.auth.scryptP >= 1 && cfg.auth.scryptP <= 16, 'RAYOBOSS_SCRYPT_P invalido.');
 assert(128 * cfg.auth.scryptN * cfg.auth.scryptR < cfg.auth.scryptMaxmem,
   'RAYOBOSS_SCRYPT_MAXMEM_MB es insuficiente para los parametros scrypt elegidos.');
+assert(cfg.musicbrainz.contact.length >= 5 && cfg.musicbrainz.contact.length <= 240,
+  'RAYOBOSS_MUSICBRAINZ_CONTACT debe identificar un correo o URL de contacto.');
 
 module.exports = cfg;

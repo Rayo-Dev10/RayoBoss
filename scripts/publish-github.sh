@@ -7,7 +7,7 @@ if [[ -z "$REMOTE_URL" ]]; then
   exit 1
 fi
 
-npm run verify
+pnpm run verify
 if [[ ! -d .git ]]; then git init; fi
 git branch -M main
 git add -A

@@ -2,6 +2,7 @@ const path = require('path');
 const crypto = require('crypto');
 const cfg = require('../config');
 const runtimeStore = require('../utils/runtime-store');
+const musicbrainz = require('./musicbrainz');
 const { writePrimary, readRecoverable } = require('../utils/storage');
 const { badRequest, notFound, forbidden } = require('../utils/errors');
 
@@ -82,6 +83,7 @@ function migrateCatalog(input) {
       performer: String(item.performer || ''),
       recordLabel: String(item.recordLabel || ''),
       notes: String(item.notes || ''),
+      musicbrainz: item.musicbrainz && typeof item.musicbrainz === 'object' ? item.musicbrainz : null,
       mediaType: item.mediaType || CATEGORIES[item.category]?.mediaType || 'other',
       rights: {
         ...rights,
@@ -158,6 +160,28 @@ function validateLicenseDescriptor({ originalName, contentType, sizeBytes }) {
   if (Number(sizeBytes) > 25 * 1024 * 1024) badRequest('El soporte de licencia no puede superar 25 MB.');
   return { extension, contentType: mime || (extension === '.pdf' ? 'application/pdf' : 'text/plain') };
 }
+function normalizeMusicBrainz(input, mediaType) {
+  if (!input) return null;
+  if (mediaType !== 'music') badRequest('MusicBrainz solo se aplica a piezas catalogadas como música.');
+  if (typeof input !== 'object' || Array.isArray(input)) badRequest('Metadatos MusicBrainz inválidos.');
+  const recordingId = optionalText(input.recordingId, 40).toLowerCase();
+  if (!musicbrainz.isValidMbid(recordingId)) badRequest('El identificador de grabación MusicBrainz no es válido.');
+  const releaseId = optionalText(input.releaseId, 40).toLowerCase();
+  const releaseGroupId = optionalText(input.releaseGroupId, 40).toLowerCase();
+  if (releaseId && !musicbrainz.isValidMbid(releaseId)) badRequest('El identificador de lanzamiento MusicBrainz no es válido.');
+  if (releaseGroupId && !musicbrainz.isValidMbid(releaseGroupId)) badRequest('El identificador de grupo MusicBrainz no es válido.');
+  const artistIds = Array.isArray(input.artistIds) ? input.artistIds.map(value => String(value).toLowerCase()) : [];
+  if (artistIds.length > 10 || artistIds.some(value => !musicbrainz.isValidMbid(value))) badRequest('Los identificadores de artista MusicBrainz no son válidos.');
+  return {
+    recordingId,
+    releaseId: releaseId || null,
+    releaseGroupId: releaseGroupId || null,
+    artistIds,
+    source: input.source === 'musicbrainz-picard' ? 'musicbrainz-picard' : 'musicbrainz',
+    matchedAt: input.matchedAt && !Number.isNaN(Date.parse(input.matchedAt)) ? new Date(input.matchedAt).toISOString() : nowIso(),
+    picardUri: `mbid://track/${recordingId}`
+  };
+}
 function normalizeMetadata(input, actor) {
   const category = String(input.category || '');
   const categoryInfo = CATEGORIES[category];
@@ -178,6 +202,7 @@ function normalizeMetadata(input, actor) {
   const isrc = optionalText(input.isrc, 20).toUpperCase();
   if (isrc && !/^[A-Z0-9-]{5,20}$/.test(isrc)) badRequest('El código ISRC no tiene un formato válido.');
   const createdAt = nowIso();
+  const mediaType = categoryInfo.mediaType;
   return {
     id: id(),
     title: requiredText(input.title, 'Título'),
@@ -191,7 +216,8 @@ function normalizeMetadata(input, actor) {
     recordLabel: optionalText(input.recordLabel, 160),
     notes: optionalText(input.notes, 500),
     category,
-    mediaType: categoryInfo.mediaType,
+    mediaType,
+    musicbrainz: normalizeMusicBrainz(input.musicbrainz, mediaType),
     subtype: optionalText(input.subtype, 40) || null,
     kind,
     contentType,
@@ -276,7 +302,7 @@ function update(actor, itemId, input) {
       rightsReference: input.rightsReference == null ? item.rights?.reference : input.rightsReference
     };
     const normalized = normalizeMetadata(merged, actor);
-    for (const field of ['title', 'artist', 'album', 'genre', 'year', 'isrc', 'composer', 'performer', 'recordLabel', 'notes', 'category', 'mediaType', 'subtype', 'durationSeconds', 'expiresAt']) {
+    for (const field of ['title', 'artist', 'album', 'genre', 'year', 'isrc', 'composer', 'performer', 'recordLabel', 'notes', 'category', 'mediaType', 'musicbrainz', 'subtype', 'durationSeconds', 'expiresAt']) {
       item[field] = normalized[field];
     }
     item.rights = { ...normalized.rights, document: item.rights?.document };
@@ -322,6 +348,6 @@ function licenseTypes() { return clone(LICENSE_TYPES); }
 
 module.exports = {
   list, get, addUploaded, replaceUploaded, update, attachLicense, remove, categories, licenseTypes,
-  normalizeMetadata, validateMediaDescriptor, validateLicenseDescriptor,
+  normalizeMetadata, validateMediaDescriptor, validateLicenseDescriptor, normalizeMusicBrainz,
   _resetForTests: () => { localCatalog = null; queue = Promise.resolve(); }
 };
