@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+$OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 Set-Location (Split-Path $PSScriptRoot -Parent)
 $keyPath = Join-Path $env:USERPROFILE '.ssh/id_ed25519'
 $sshTarget = 'rayogestion.com@ssh.us.stackcp.com'
@@ -45,13 +46,13 @@ test ! -e "$target/index.html"
 $pathChecks = ($expectedFiles | ForEach-Object { "test ! -L `"`$target/$_`"" }) -join "`n"
 $guard = $guard + "`n" + $pathChecks + "`n"
 $preflight = $guard + "`nif test -f `"`$target/private/config.php`"; then echo CONFIG_EXISTS; else echo CONFIG_NEEDED; fi`n"
-$remoteState = $preflight | ssh @sshOptions $sshTarget "tr -d '\r' | bash -s"
+$remoteState = $preflight | ssh @sshOptions $sshTarget "tr -d '\r' | bash -e -s"
 if ($LASTEXITCODE -ne 0) { throw 'Destino no seguro o existe index.html que puede ocultar la portada; no se transfirió nada.' }
 if ($remoteState -contains 'CONFIG_NEEDED') {
     node scripts/prepare-stackcp-config.js
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar la configuración.' }
     $prepare = $guard + "`numask 077`nmkdir -p `"`$target/private`"`nchmod 700 `"`$target/private`"`ntest ! -e `"`$target/private/config.php`"`n"
-    $prepare | ssh @sshOptions $sshTarget "tr -d '\r' | bash -s"
+    $prepare | ssh @sshOptions $sshTarget "tr -d '\r' | bash -e -s"
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar el directorio privado.' }
     scp @sshOptions 'data/stackcp-deploy/config.php' "${sshTarget}:/home/sites/42b/e/e52161a3c2/public_html/radio/private/config.php"
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo transferir la configuración.' }
@@ -68,12 +69,12 @@ $checks = foreach ($file in $expectedFiles | Where-Object { $_ -ne 'index.php' }
 }
 $lint = ($expectedFiles | Where-Object { $_.EndsWith('.php') -and $_ -ne 'index.php' } | ForEach-Object { "php -l '$_'" }) -join "`n"
 $verification = $guard + "`ncd `"`$target`"`nsha256sum -c <<'HASHES'`n" + ($checks -join "`n") + "`nHASHES`n" + $lint + "`n"
-$verification | ssh @sshOptions $sshTarget "tr -d '\r' | bash -s"
+$verification | ssh @sshOptions $sshTarget "tr -d '\r' | bash -e -s"
 if ($LASTEXITCODE -ne 0) { throw 'Falló la verificación remota.' }
 scp @sshOptions (Join-Path $artifact 'index.php') "${sshTarget}:/home/sites/42b/e/e52161a3c2/public_html/radio/index.php"
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo activar la portada.' }
 $indexHash = (Get-FileHash (Join-Path $artifact 'index.php') -Algorithm SHA256).Hash.ToLowerInvariant()
 $finalCheck = $guard + "`ncd `"`$target`"`necho '$indexHash  index.php' | sha256sum -c`nphp -l index.php`n"
-$finalCheck | ssh @sshOptions $sshTarget "tr -d '\r' | bash -s"
+$finalCheck | ssh @sshOptions $sshTarget "tr -d '\r' | bash -e -s"
 if ($LASTEXITCODE -ne 0) { throw 'Falló la verificación final.' }
 Write-Output "Archivos verificados en radio/. Commit publicado: $commit"
