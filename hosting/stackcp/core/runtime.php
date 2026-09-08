@@ -102,9 +102,23 @@ function rb_body(): array {
     if (!is_array($data) || substr(ltrim($raw), 0, 1) !== '{') rb_error(400, 'Solicitud inválida.');
     return $data;
 }
+function rb_origin_authority(string $value): ?string {
+    $parts = parse_url($value);
+    if (!is_array($parts) || !in_array(strtolower($parts['scheme'] ?? ''), ['http','https'], true) || empty($parts['host']) || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])) return null;
+    if (isset($parts['path']) && $parts['path'] !== '' && $parts['path'] !== '/') return null;
+    $scheme = strtolower($parts['scheme']);
+    $port = isset($parts['port']) && !(($scheme === 'https' && $parts['port'] === 443) || ($scheme === 'http' && $parts['port'] === 80)) ? ':' . $parts['port'] : '';
+    return $scheme . '://' . strtolower($parts['host']) . $port;
+}
 function rb_origin(): void {
     if (in_array($_SERVER['REQUEST_METHOD'], ['GET','HEAD','OPTIONS'], true)) return;
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if ($origin !== '' && $origin !== rb_config()['origin']) rb_error(403, 'Origen de solicitud no autorizado.');
+    $forwarded = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')[0]));
+    $scheme = in_array($forwarded, ['http','https'], true) ? $forwarded : (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http');
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $requestAuthority = preg_match('/^[a-z0-9.-]+(?::\d{1,5})?$/iD', $host) ? rb_origin_authority($scheme . '://' . $host) : null;
+    $providedAuthority = $origin === '' ? null : rb_origin_authority($origin);
+    $configuredAuthority = rb_origin_authority(rb_config()['origin']);
+    if ($origin !== '' && ($providedAuthority === null || !in_array($providedAuthority, [$configuredAuthority, $requestAuthority], true))) rb_error(403, 'Origen de solicitud no autorizado.');
     if (($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '') === 'cross-site') rb_error(403, 'Solicitud externa no autorizada.');
 }

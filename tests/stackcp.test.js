@@ -35,6 +35,7 @@ const phpArgs=process.platform==='win32'?['-d','extension=sodium','-d','extensio
   const authenticatedPage=await fetch(base,{headers:{Cookie:cookies.dev}});const authenticatedHtml=await authenticatedPage.text();assert.equal(authenticatedPage.status,200);assert.match(authenticatedHtml,/id="t-admin"/);assert.match(authenticatedHtml,/\/css\/app\.css/);count++;
   await req('GET','/me',undefined,'dev');
   const cross=await fetch(base+'/api.php?route=/users',{method:'POST',headers:{Cookie:cookies.dev,Origin:'https://other.example','Content-Type':'application/json'},body:'{}'});assert.equal(cross.status,403);
+  const alternateHost=`localhost:${port}`;const sameHost=await fetch(base+'/api.php?route=/me',{method:'GET',headers:{Cookie:cookies.dev,Host:alternateHost,Origin:`http://${alternateHost}`}});assert.equal(sameHost.status,200);await sameHost.text();count++;
   await req('POST','/users',{username:'admin1',role:'administrador',password},'dev');await req('POST','/login',{username:'admin1',password},'admin');
   await req('POST','/users',{username:'dev2',role:'desarrollador',password},'admin',403);
   await req('POST','/users',{username:'locutor1',role:'locutor',password},'admin');await req('POST','/login',{username:'locutor1',password},'loc');
