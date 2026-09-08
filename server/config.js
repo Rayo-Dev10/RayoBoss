@@ -57,7 +57,7 @@ const cfg = {
   isVercel,
   isProduction,
   mode: isVercel ? 'vercel-poc' : 'vps-local',
-  version: '4.0.1',
+  version: '4.1.0-alpha.1',
   server: {
     port: envInt('PORT', file.server.port),
     jsonLimit: envString('RAYOBOSS_JSON_LIMIT', file.server.jsonLimit),

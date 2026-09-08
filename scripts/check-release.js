@@ -14,16 +14,16 @@ const required = [
 for (const item of required) if (!fs.existsSync(path.join(root, item))) errors.push(`falta ${item}`);
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-if (pkg.version !== '4.0.1') errors.push(`package.json tiene versión ${pkg.version}`);
+if (pkg.version !== '4.1.0-alpha.1') errors.push(`package.json tiene versión ${pkg.version}`);
 if (pkg.engines?.node !== '24.x') errors.push('package.json no exige Node.js 24.x');
 if (pkg.packageManager !== 'pnpm@10.34.5') errors.push('package.json no fija pnpm 10.34.5');
 const lock = fs.readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8');
 if (!lock.includes("lockfileVersion: '9.0'")) errors.push('pnpm-lock.yaml no usa el formato esperado de pnpm 10');
 
 const config = fs.readFileSync(path.join(root, 'server/config.js'), 'utf8');
-if (!config.includes("version: '4.0.1'")) errors.push('server/config.js no declara 4.0.1');
+if (!config.includes("version: '4.1.0-alpha.1'")) errors.push('server/config.js no declara 4.1.0-alpha.1');
 const bundle = fs.readFileSync(path.join(root, 'api/index.js'), 'utf8');
-if (!bundle.includes('bundle Vercel generado')) errors.push('api/index.js no fue generado por el build de 4.0.1');
+if (!bundle.includes('bundle Vercel generado')) errors.push('api/index.js no fue generado por el build de 4.1.0-alpha.1');
 if (bundle.includes("require('../server/app')")) errors.push('api/index.js todavía depende de un módulo local externo al bundle');
 
 const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
@@ -48,4 +48,4 @@ if (errors.length) {
   errors.forEach(error => console.error(`  - ${error}`));
   process.exit(1);
 }
-console.log('Release 4.0.1 verificado: estructura crítica completa y bundle Vercel autocontenido.');
+console.log('Release 4.1.0-alpha.1 verificado: estructura crítica completa y bundle Vercel autocontenido.');

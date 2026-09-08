@@ -65,10 +65,10 @@ async function test(name, fn) {
   const server = app.listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
 
-  await test('1. Health informa versión 4.0.1', async () => {
+  await test('1. Health informa versión 4.1.0-alpha.1', async () => {
     const result = await request('GET', '/api/health');
     assert.equal(result.status, 200);
-    assert.equal(result.body.version, '4.0.1');
+    assert.equal(result.body.version, '4.1.0-alpha.1');
   });
 
   await test('2. Configuracion exige secretos sin fallback incrustado', async () => {
@@ -994,7 +994,7 @@ async function test(name, fn) {
     let headers;
     musicbrainz._setFetchForTests(async (url, options) => { headers = options.headers; return { ok: true, json: async () => ({ recordings: [] }) }; });
     await musicbrainz.search({ title: 'Identificación' });
-    assert.match(headers['User-Agent'], /^RayoBoss\/4\.0\.1/);
+    assert.ok(headers['User-Agent'].startsWith(`RayoBoss/${cfg.version} `));
     assert.ok(headers['User-Agent'].includes(cfg.musicbrainz.contact));
   });
 
@@ -1197,7 +1197,7 @@ async function test(name, fn) {
 
   server.close();
   const failures = results.filter(([status]) => status === 'FALLA');
-  console.log('\nRayoBoss 4.0.1 - Reporte de pruebas');
+  console.log('\nRayoBoss 4.1.0-alpha.1 - Reporte de pruebas');
   for (const [status, name] of results) console.log(`  [${status}] ${name}`);
   console.log(`\n${results.length - failures.length}/${results.length} pruebas aprobadas`);
   fs.rmSync(testDataDir, { recursive: true, force: true });

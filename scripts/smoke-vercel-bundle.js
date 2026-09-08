@@ -14,7 +14,7 @@ server.listen(0, '127.0.0.1', () => {
     res.on('data', c => chunks.push(c));
     res.on('end', () => {
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      if (res.statusCode !== 200 || body.version !== '4.0.1' || body.ok !== true) {
+      if (res.statusCode !== 200 || body.version !== require('./package.json').version || body.ok !== true) {
         console.error(JSON.stringify({ status: res.statusCode, body }));
         server.close(() => process.exit(1));
         return;

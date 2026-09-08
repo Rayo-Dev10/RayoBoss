@@ -25,3 +25,9 @@ pnpm run verify:full
 ```
 
 Antes del `push`, `scripts/publish-github.sh` comprueba que Git esté siguiendo todos los módulos necesarios y que `.env` no forme parte del commit.
+
+El destino PHP StackCP tiene una comprobación adicional: `pnpm run test:stackcp`.
+Requiere PHP CLI local y valida un artefacto aislado, sin datos operativos. Después
+del despliegue se verifica HTTPS y PHP FPM mediante el procedimiento de
+[StackCP](12-DESPLIEGUE-STACKCP.md). La suite Node/Vercel no acredita por sí sola
+la adaptación de esas funciones a PHP.

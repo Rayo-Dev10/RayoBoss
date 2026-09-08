@@ -1,4 +1,4 @@
-// RayoBoss 4.0.1 - bundle Vercel generado; no editar manualmente.
+// RayoBoss 4.1.0-alpha.1 - bundle Vercel generado; no editar manualmente.
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -176,7 +176,7 @@ var require_config = __commonJS({
       isVercel,
       isProduction,
       mode: isVercel ? "vercel-poc" : "vps-local",
-      version: "4.0.1",
+      version: "4.1.0-alpha.1",
       server: {
         port: envInt("PORT", file.server.port),
         jsonLimit: envString("RAYOBOSS_JSON_LIMIT", file.server.jsonLimit),
