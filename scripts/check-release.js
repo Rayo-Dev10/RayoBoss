@@ -9,21 +9,26 @@ const required = [
   'server/core/media-library.js', 'server/core/musicbrainz.js', 'server/core/playback-history.js', 'server/routes/media.js', 'server/routes/reports.js',
   'server/core/storage/storage-factory.js', 'server/core/storage/storage-provider.js',
   'server/core/storage/local-disk-storage-provider.js', 'server/core/storage/vercel-blob-storage-provider.js',
-  'public/index.html', 'public/embed.html', 'public/js/blob-client.js', 'public/js/library-v4.js', 'public/js/reports-v4.js'
+  'public/index.html', 'public/embed.html', 'public/js/blob-client.js', 'public/js/library-v4.js', 'public/js/reports-v4.js',
+  'hosting/stackcp/index.php', 'hosting/stackcp/api.php', 'hosting/stackcp/embed.php',
+  'hosting/stackcp/core/runtime.php', 'hosting/stackcp/core/auth.php', 'hosting/stackcp/core/storage.php',
+  'hosting/stackcp/core/media.php', 'hosting/stackcp/core/programming.php', 'hosting/stackcp/core/rtc.php',
+  'hosting/stackcp/core/public.php', 'hosting/stackcp/core/musicbrainz.php',
+  'scripts/build-stackcp.js', 'scripts/deploy-stackcp.ps1', 'tests/stackcp.test.js'
 ];
 for (const item of required) if (!fs.existsSync(path.join(root, item))) errors.push(`falta ${item}`);
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-if (pkg.version !== '4.1.0-alpha.1') errors.push(`package.json tiene versión ${pkg.version}`);
+if (pkg.version !== '4.1.0') errors.push(`package.json tiene versión ${pkg.version}`);
 if (pkg.engines?.node !== '24.x') errors.push('package.json no exige Node.js 24.x');
 if (pkg.packageManager !== 'pnpm@10.34.5') errors.push('package.json no fija pnpm 10.34.5');
 const lock = fs.readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8');
 if (!lock.includes("lockfileVersion: '9.0'")) errors.push('pnpm-lock.yaml no usa el formato esperado de pnpm 10');
 
 const config = fs.readFileSync(path.join(root, 'server/config.js'), 'utf8');
-if (!config.includes("version: '4.1.0-alpha.1'")) errors.push('server/config.js no declara 4.1.0-alpha.1');
+if (!config.includes("version: '4.1.0'")) errors.push('server/config.js no declara 4.1.0');
 const bundle = fs.readFileSync(path.join(root, 'api/index.js'), 'utf8');
-if (!bundle.includes('bundle Vercel generado')) errors.push('api/index.js no fue generado por el build de 4.1.0-alpha.1');
+if (!bundle.includes('bundle Vercel generado')) errors.push('api/index.js no fue generado por el build de 4.1.0');
 if (bundle.includes("require('../server/app')")) errors.push('api/index.js todavía depende de un módulo local externo al bundle');
 
 const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
@@ -48,4 +53,4 @@ if (errors.length) {
   errors.forEach(error => console.error(`  - ${error}`));
   process.exit(1);
 }
-console.log('Release 4.1.0-alpha.1 verificado: estructura crítica completa y bundle Vercel autocontenido.');
+console.log('Release 4.1.0 verificado: estructura crítica completa y bundle Vercel autocontenido.');

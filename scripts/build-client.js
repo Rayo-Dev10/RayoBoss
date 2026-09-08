@@ -30,7 +30,7 @@ esbuild.buildSync({
   target: ['node24'],
   packages: 'external',
   outfile: path.join(apiDir, 'index.js'),
-  banner: { js: '// RayoBoss 4.1.0-alpha.1 - bundle Vercel generado; no editar manualmente.' },
+  banner: { js: '// RayoBoss 4.1.0 - bundle Vercel generado; no editar manualmente.' },
   legalComments: 'none'
 });
 

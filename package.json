@@ -1,6 +1,6 @@
 {
   "name": "rayoboss",
-  "version": "4.1.0-alpha.1",
+  "version": "4.1.0",
   "description": "Plataforma radial multimedia con AutoDJ visual, estudio WebRTC, biblioteca audiovisual y despliegue en Vercel o VPS",
   "main": "server.js",
   "scripts": {

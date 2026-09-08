@@ -1,52 +1,85 @@
-# Despliegue en StackCP
+# Despliegue y operación en StackCP
 
-## Estado del destino PHP
+## Plataforma
 
-La versión 4.1.0-alpha.1 ofrece la pantalla de ingreso institucional. Los campos están deshabilitados y explican que el acceso está en preparación. No se envían contraseñas ni se simula una sesión. Usuarios, biblioteca, programación, informes y vivo todavía requieren la adaptación descrita en el [plan](11-PLAN-STACKCP.md).
+RayoBoss 4.1.0 utiliza PHP 7.4 o posterior con Sodium, Fileinfo, JSON y Hash. MusicBrainz necesita cURL. Producción confirma PHP 7.4.33 FPM; PHP CLI puede usar otra versión. No se requieren Composer, Node.js en producción, MySQL, sudo ni cambios en Apache/Nginx.
 
-PHP 7.4 es la sintaxis mínima de este destino. No se requiere Composer, MySQL, Node.js en producción, acceso root ni reglas de reescritura. El destino Node/Vercel permanece separado.
+El directorio exclusivo es `~/public_html/radio/`, resuelto como `/home/sites/42b/e/e52161a3c2/public_html/radio`. El dominio es https://radio.rayogestion.com/.
 
-## Validar localmente
+## Acceso y navegación
 
-Con Node.js/pnpm y PHP CLI disponibles:
+La raíz presenta el ingreso institucional. La cuenta inicial es `dev` y utiliza la contraseña `RAYOBOSS_DEV_PASSWORD` del `.env` local empleado al aprovisionar. La contraseña nunca se publica en Git ni se copia en texto plano al hosting.
+
+Las secciones usan enlaces como `/index.php?section=biblioteca` y `/index.php?section=programacion`. La API usa `/api.php?route=/media`. El reproductor público es `/embed.php?autoplay=1`. No se requieren rewrites.
+
+El estudio conserva cámara, pantalla, micrófonos remotos, coanfitriones, efectos, cama y ducking. El navegador puede pedir permisos para dispositivos y una pulsación para reproducir sonido. Mantener abierto el estudio conductor durante el vivo.
+
+## Validación local
+
+Se necesitan Node.js 24, pnpm y PHP CLI con Sodium y Fileinfo. En Windows, las pruebas cargan las extensiones distribuidas con PHP sin modificar su configuración global.
 
 ```powershell
 pnpm run verify:full
 pnpm run test:stackcp
 ```
 
-La prueba StackCP genera el artefacto e inicia un servidor PHP local temporal. Comprueba portada, CSS, diagnóstico, integridad, cabeceras de seguridad, rechazo de envíos y exclusión de archivos privados. La versión del PHP local puede diferir de FPM; la comprobación HTTPS posterior valida el entorno real.
+La segunda comprobación verifica la implementación PHP y usa archivos temporales, sin modificar `data/` operativo. Consulta la [cobertura y límites de las pruebas](13-VERIFICACION-STACKCP.md).
 
-## Publicar
+## Publicación y despliegue
 
-Revisar `git status`, `git diff`, archivos nuevos y contenido del índice. No incluir secretos ni datos. Después:
+Revisar `git status`, `git diff` y los archivos nuevos. Después:
 
 ```powershell
 git add -A
 pnpm run check:git
 git diff --cached --check
-git commit -m "Añadir acceso PHP para StackCP"
+git commit -m "Migrar funciones de RayoBoss a StackCP"
 git push origin main
 ```
 
-Detenerse si falla cualquier paso. Únicamente tras push exitoso:
+Detenerse si falla cualquier paso. Solo después de push exitoso:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/deploy-stackcp.ps1
 ```
 
-El script exige main limpio y el mismo commit en GitHub; genera `dist/stackcp/`, valida el destino real, rechaza enlaces simbólicos y una portada `index.html` que oculte PHP, copia únicamente `index.php`, `login.css` y `manifest.json` mediante SCP y verifica hashes remotos. SCP sirve como transferencia equivalente cuando rsync no está instalado en Windows. No realiza eliminaciones.
+El script exige main limpio y el mismo commit en GitHub. Construye `dist/stackcp/`, contrasta todos sus archivos con el manifiesto y rechaza rutas inesperadas o enlaces simbólicos. Transfiere únicamente el artefacto mediante SCP, verifica hashes y sintaxis remota y activa `index.php` al final. No utiliza borrados ni modifica proyectos vecinos.
 
-Destino exclusivo: `~/public_html/radio/`, actualmente resuelto como `/home/sites/42b/e/e52161a3c2/public_html/radio`. Clave: `$env:USERPROFILE/.ssh/id_ed25519`. El script se detiene si esa ruta cambia.
+Si falta la configuración remota, prepara `data/stackcp-deploy/config.php` localmente usando `.env`; transfiere únicamente el hash scrypt y el secreto de firma a `radio/private/config.php`, con acceso HTTP bloqueado y permisos 600. No imprime credenciales. Si ya existe configuración, la conserva. La conexión usa `$env:USERPROFILE/.ssh/id_ed25519`.
 
-El manifiesto solo contiene versión y hashes públicos. No subir `.env`, repositorio, módulos Node, pruebas ni datos. No transferir `public/` del destino Node como sustituto del artefacto PHP.
+El destino contiene archivos públicos de aplicación y el directorio privado. Nunca subir todo el repositorio, `.env`, `node_modules`, pruebas ni datos de otra instalación. El manifiesto no incluye configuración privada ni estado.
 
-## Verificar la entrega
+## Persistencia y credenciales
 
-- https://radio.rayogestion.com/ debe responder 200 y mostrar el ingreso institucional.
-- https://radio.rayogestion.com/login.css debe responder 200.
-- https://radio.rayogestion.com/index.php?health=1 informa versión, etapa y capacidades mínimas de PHP, sin secretos ni rutas internas.
-- `authenticationReady: false` identifica expresamente la fase actual.
-- Revisar en navegador ancho de escritorio y móvil; la portada no necesita JavaScript.
+`private/state.php` contiene usuarios, solicitudes, permisos, programación, catálogo, señales temporales e informes. `private/state.bak.php` permite recuperar el último estado válido. Un bloqueo entre procesos protege las modificaciones; la escritura utiliza un archivo temporal protegido y cambio atómico.
 
-La prueba remota CLI de sintaxis no sustituye la prueba web FPM. La disponibilidad de scrypt se comprueba en `runtime.scryptAvailable`; no se presupone por tener PHP instalado.
+Los archivos privados terminan en `.php` y abortan cualquier acceso HTTP antes de emitir datos. Los binarios subidos también se almacenan con una cabecera PHP de bloqueo; solo el proveedor los sirve por una ruta controlada con soporte de rangos. Las licencias requieren sesión autorizada. El despliegue no reemplaza estos datos.
+
+Las contraseñas usan scrypt nativo de Sodium, con sal generada automáticamente. El formato de almacenamiento es diferente al de Node. La instalación remota empieza con dev y las semillas públicas: no importa automáticamente usuarios, contraseñas, archivos ni datos operativos locales. La programación admite su respaldo JSON desde la interfaz.
+
+Cambiar una contraseña en el panel invalida sus sesiones anteriores. La configuración inicial de dev solo se sincroniza de nuevo cuando se cambia el hash provisionado; redeployar no revierte una contraseña cambiada en el panel. No borrar los datos para recuperar acceso.
+
+## Biblioteca y límites de carga
+
+Las cargas son locales y admiten los mismos formatos de audio, video y soportes jurídicos de la biblioteca. Fileinfo valida el contenido, no solo el nombre. El límite efectivo es el menor entre el límite de aplicación de 64 MB y los límites PHP de la cuenta; un certificado admite hasta 25 MB dentro de ese límite efectivo. Las restricciones reales del proveedor prevalecen.
+
+La búsqueda MusicBrainz usa HTTPS, identificación de la aplicación, caché y límite de una consulta por segundo. Las etiquetas Picard se leen en el navegador. No se conecta Vercel Blob en este destino.
+
+## AutoDJ y vivo
+
+Los horarios se interpretan en `America/Bogota`. Se conservan playlists, orden aleatorio, repetición, franjas nocturnas, respaldo, identificadores y cuñas. Los informes registran ocurrencias iniciadas por reproductores y piezas del estudio; no sustituyen la revisión jurídica.
+
+El vivo distribuye audio/video entre navegadores mediante WebRTC y señalización PHP con peticiones breves. Los topes son ocho participantes y cuarenta oyentes, sin afirmar capacidad de carga validada. TURN es opcional y solo debe incorporarse a `iceServers` con un servicio y credenciales reales.
+
+Este hosting no ejecuta un worker continuo de audio, FFmpeg, Icecast, HLS ni distribución masiva. AutoDJ se resuelve por reloj cuando un navegador lo consulta. La transición configurada se informa al reproductor, conforme al modelo de control existente; no equivale a procesamiento de audio de servidor. Para una emisora 24/7 independiente del navegador hace falta un plano de medios externo.
+
+## Verificación de producción
+
+- `/`: ingreso institucional.
+- `/index.php?health=1`: PHP web, versión y configuración de autenticación presente.
+- `/api.php?route=/health`: salud del servidor PHP.
+- Login dev, catálogo, programación, informes y reproductor.
+- `/private/config.php`, `/private/state.php` y módulos `/core/`: respuesta 404 sin contenido.
+- `manifest.json`: hashes públicos del código desplegado.
+
+La verificación PHP CLI remota no sustituye las peticiones HTTPS a FPM. Si falla una operación, revisar los registros PHP del sitio; las respuestas públicas no incluyen rutas privadas ni secretos.

@@ -80,4 +80,6 @@ Ante fallo de build, pruebas, commit o push, detener el despliegue. Si falla una
 
 ## Estado de seguimiento
 
-Este documento define la adaptación completa. La primera entrega implementa solo la entrada al dominio. Las siguientes entregas requieren sus propias pruebas y no se consideran operativas por tener un plan escrito.
+La implementación PHP 4.1.0 incorpora los módulos del plano de control, autenticación scrypt, almacenamiento protegido y señalización WebRTC. La verificación web confirmó Sodium en PHP 7.4.33 FPM. Se conservaron los clientes de estudio, biblioteca, programación e informes mediante un artefacto adaptado a rutas PHP explícitas.
+
+La [verificación funcional](13-VERIFICACION-STACKCP.md) distingue pruebas HTTP, concurrencia y navegador de los límites no acreditados. El plano de medios permanente descrito en la etapa 5 sigue siendo una integración externa, no un servicio ficticio del hosting.

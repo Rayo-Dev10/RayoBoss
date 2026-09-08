@@ -1,12 +1,14 @@
-# RayoBoss 4.1.0-alpha.1
+# RayoBoss 4.1.0
 
 RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC colaborativo, captura de cámara o pantalla, biblioteca audiovisual con metadatos MusicBrainz/Picard y licencias, carga masiva, AutoDJ programable mediante interfaz visual, informe mensual de reproducción, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
 
 ## Hosting compartido StackCP
 
-El destino PHP muestra la pantalla de ingreso institucional en https://radio.rayogestion.com/. La autenticación y las funciones radiales en este destino están pendientes de adaptación; los destinos Node/Vercel conservan su implementación. El artefacto `dist/stackcp/` se genera localmente con `pnpm run build:stackcp` y no requiere Node.js, Composer ni MySQL en producción.
+El destino PHP funciona en https://radio.rayogestion.com/ con PHP 7.4 FPM, Sodium y Fileinfo. Incluye inicio de sesión, roles, invitados, micrófonos, estudio WebRTC, biblioteca con cargas locales y soportes jurídicos, MusicBrainz/Picard, programación visual, reproductor e informes. No necesita Node.js, Composer ni MySQL en producción.
 
-Consulta el [plan versionado de adaptación](docs/11-PLAN-STACKCP.md) y la [guía de despliegue](docs/12-DESPLIEGUE-STACKCP.md).
+Los datos se guardan en archivos PHP protegidos, con bloqueo entre procesos y recuperación desde respaldo. El vivo requiere mantener abierto el navegador conductor. AutoDJ se resuelve por reloj y se reproduce en cada navegador; el hosting no ejecuta una emisora continua de servidor ni un distribuidor masivo.
+
+Consulta la [guía de despliegue y operación](docs/12-DESPLIEGUE-STACKCP.md), el [plan de adaptación](docs/11-PLAN-STACKCP.md) y la [verificación de la migración](docs/13-VERIFICACION-STACKCP.md).
 
 ## Requisitos para Node/Vercel
 
@@ -116,7 +118,7 @@ Respuesta esperada:
 {
   "ok": true,
   "name": "RayoBoss",
-  "version": "4.1.0-alpha.1",
+  "version": "4.1.0",
   "mode": "vercel-poc"
 }
 ```

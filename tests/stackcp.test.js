@@ -1,71 +1,106 @@
-const assert = require('node:assert/strict');
-const { spawn, execFileSync } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
-const net = require('node:net');
-const crypto = require('node:crypto');
-const root = path.resolve(__dirname, '..');
-
-async function main() {
-  execFileSync(process.execPath, ['scripts/build-stackcp.js'], { cwd: root });
-  const artifact = path.join(root, 'dist', 'stackcp');
-  execFileSync('php', ['-l', path.join(artifact, 'index.php')]);
-  const manifest = JSON.parse(fs.readFileSync(path.join(artifact, 'manifest.json')));
-  assert.equal(manifest.version, require('../package.json').version);
-  assert.deepEqual(fs.readdirSync(artifact).sort(), ['index.php', 'login.css', 'manifest.json']);
-  for (const [file, hash] of Object.entries(manifest.files)) {
-    assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(artifact, file))).digest('hex'), hash);
-    assert.equal(fs.readFileSync(path.join(artifact, file), 'utf8'), fs.readFileSync(path.join(root, 'hosting/stackcp', file), 'utf8'));
-  }
-  const socket = net.createServer();
-  await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
-  const port = socket.address().port;
-  await new Promise(resolve => socket.close(resolve));
-  const server = spawn('php', ['-S', `127.0.0.1:${port}`, '-t', artifact], { stdio: 'ignore' });
-  let spawnError;
-  server.on('error', error => { spawnError = error; });
-  try {
-    const base = `http://127.0.0.1:${port}`;
-    let ready = false;
-    for (let i = 0; i < 50; i++) {
-      if (spawnError) throw spawnError;
-      try { ready = (await fetch(base)).ok; } catch (_) {}
-      if (ready) break;
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    assert.ok(ready, 'PHP inicia y sirve la raíz');
-    const page = await fetch(base);
-    assert.equal(page.status, 200);
-    assert.equal(page.headers.get('x-frame-options'), 'DENY');
-    assert.equal(page.headers.get('x-content-type-options'), 'nosniff');
-    assert.match(page.headers.get('cache-control'), /no-store/);
-    assert.match(page.headers.get('content-security-policy'), /form-action 'none'/);
-    assert.doesNotMatch(page.headers.get('content-security-policy'), /unsafe-inline/);
-    const html = await page.text();
-    assert.match(html, /Ingreso institucional/);
-    assert.match(html, /Acceso en preparación/);
-    assert.match(html, /type="password"[^>]*disabled/);
-    assert.match(html, /type="submit" disabled/);
-    assert.doesNotMatch(html, /<script|\/api\/|BLOB_READ_WRITE_TOKEN|RAYOBOSS_SECRET/);
-    const css = await fetch(new URL(html.match(/href="([^\"]+\.css[^\"]*)"/)[1], base));
-    assert.equal(css.status, 200);
-    assert.match(await css.text(), /@media/);
-    const health = await (await fetch(`${base}/index.php?health=1`)).json();
-    assert.equal(health.ok, true);
-    assert.equal(health.version, manifest.version);
-    assert.equal(health.authenticationReady, false);
-    assert.equal(typeof health.runtime.scryptAvailable, 'boolean');
-    for (const method of ['POST', 'PUT', 'DELETE']) {
-      const result = await fetch(base, { method, body: 'password=DO_NOT_ECHO' });
-      assert.equal(result.status, 405);
-      assert.equal(result.headers.get('allow'), 'GET, HEAD');
-      assert.doesNotMatch(await result.text(), /DO_NOT_ECHO/);
-    }
-    assert.equal((await fetch(base, { method: 'HEAD' })).status, 200);
-    for (const file of ['.env', 'server.js', 'package.json', 'AGENTS.md']) {
-      assert.equal((await fetch(`${base}/${file}`)).status, 404);
-    }
-    console.log('StackCP: artefacto, integridad, portada, CSS, diagnóstico, cabeceras, métodos y exclusión de secretos verificados.');
-  } finally { server.kill(); }
-}
-main().catch(error => { console.error(error); process.exitCode = 1; });
+const assert=require('node:assert/strict');
+const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const crypto=require('node:crypto');
+const {spawn,execFileSync}=require('node:child_process');const net=require('node:net');
+const root=path.resolve(__dirname,'..');
+const nativeFetch=globalThis.fetch;
+globalThis.fetch=(url,options={})=>nativeFetch(url,{...options,headers:{...options.headers,Connection:'close'}});
+const phpArgs=process.platform==='win32'?['-d','extension=sodium','-d','extension=fileinfo']:[];
+(async()=>{
+ execFileSync(process.execPath,['scripts/build-stackcp.js'],{cwd:root});
+ const manifest=JSON.parse(fs.readFileSync(path.join(root,'dist/stackcp/manifest.json')));
+ assert.equal(manifest.version,require('../package.json').version);
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'rayoboss-php-test-'));
+ for(const [name,hash] of Object.entries(manifest.files)){
+  assert.ok(!name.startsWith('private/')&&!name.includes('.env'));
+  const bytes=fs.readFileSync(path.join(root,'dist/stackcp',name));assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),hash);
+  const target=path.join(temp,name);fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,bytes);
+  if(name.endsWith('.php'))execFileSync('php',[...phpArgs,'-l',target]);
+  if(name.endsWith('.js'))execFileSync(process.execPath,['--check',target]);
+ }
+ fs.mkdirSync(path.join(temp,'private'));
+ const socket=net.createServer();await new Promise(r=>socket.listen(0,'127.0.0.1',r));const port=socket.address().port;await new Promise(r=>socket.close(r));const base=`http://127.0.0.1:${port}`;
+ const password='Test-Only-Password-2026';
+ execFileSync('php',[...phpArgs,path.join(root,'scripts/provision-stackcp.php'),path.join(temp,'private/config.php')],{input:JSON.stringify({password,secret:crypto.randomBytes(32).toString('hex'),origin:base})});
+ const server=spawn('php',[...phpArgs,'-d','upload_max_filesize=8M','-d','post_max_size=10M','-S',`127.0.0.1:${port}`,'-t',temp],{stdio:['ignore','ignore','pipe']});let logs='';server.stderr.on('data',b=>logs+=b);
+ const cookies={};let count=0;
+ async function req(method,route,body,user,expected=200){const headers={Origin:base};if(user&&cookies[user])headers.Cookie=cookies[user];if(body!==undefined)headers['Content-Type']='application/json';const res=await fetch(base+'/api.php?route='+route,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});const text=await res.text();assert.equal(res.status,expected,`${method} ${route}: ${text}`);count++;let data;try{data=JSON.parse(text)}catch{data=text}if(user&&res.headers.get('set-cookie'))cookies[user]=res.headers.get('set-cookie').split(';')[0];return {data,res,text};}
+ try{
+  for(let i=0;i<60;i++){try{const ready=await fetch(base);await ready.text();if(ready.ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+  const page=await fetch(base);assert.equal(page.status,200);assert.match(await page.text(),/id="btnLogin"/);assert.equal(page.headers.get('x-frame-options'),'DENY');
+  const embed=await fetch(base+'/embed.php');await embed.text();assert.equal(embed.status,200);assert.equal(embed.headers.get('x-frame-options'),null);assert.match(embed.headers.get('content-security-policy'),/frame-ancestors \*/);
+  await req('GET','/health');await req('GET','/users',undefined,null,401);
+  await req('POST','/login',{username:'dev',password:'wrong'},null,401);
+  const login=await req('POST','/login',{username:'dev',password},'dev');assert.equal(login.data.user.role,'desarrollador');assert.match(login.res.headers.get('set-cookie'),/HttpOnly/i);assert.match(login.res.headers.get('set-cookie'),/SameSite=Strict/i);
+  await req('GET','/me',undefined,'dev');
+  const cross=await fetch(base+'/api.php?route=/users',{method:'POST',headers:{Cookie:cookies.dev,Origin:'https://other.example','Content-Type':'application/json'},body:'{}'});assert.equal(cross.status,403);
+  await req('POST','/users',{username:'admin1',role:'administrador',password},'dev');await req('POST','/login',{username:'admin1',password},'admin');
+  await req('POST','/users',{username:'dev2',role:'desarrollador',password},'admin',403);
+  await req('POST','/users',{username:'locutor1',role:'locutor',password},'admin');await req('POST','/login',{username:'locutor1',password},'loc');
+  await req('DELETE','/users/dev',undefined,'dev',403);await req('DELETE','/users/locutor1',undefined,'admin',403);
+  await req('GET','/users',undefined,'loc',403);
+  await req('POST','/users/locutor1/password',{newPassword:password+'X'},'admin');await req('GET','/me',undefined,'loc',401);await req('POST','/login',{username:'locutor1',password:password+'X'},'loc');
+  await req('POST','/guests/request',{nombre:'<script>',apellido:'A'},null,400);
+  const guest=(await req('POST','/guests/request',{nombre:'María',apellido:'Gómez'})).data;assert.equal(guest.microphoneRequest,null);
+  const credentials=(await req('POST',`/guests/${guest.request.id}/approve`,{},'admin')).data.credentials;
+  await req('POST',`/guests/${guest.request.id}/approve`,{},'admin',400);
+  await req('POST','/login',{username:credentials.username,password:credentials.temporaryPassword},'guest');
+  assert.ok(!(await req('GET','/guests',undefined,'admin')).text.includes(credentials.temporaryPassword));
+  await req('POST','/microphones/request',{},'guest',400);
+  const live=(await req('POST','/live/start',{title:'Prueba de emisión'},'dev')).data.status;
+  await req('POST','/live/start',{title:'No reemplazar'},'loc',409);
+  const mic=(await req('POST','/microphones/request',{},'guest')).data.request;
+  await req('POST','/rtc/participants/join',{},'guest',403);
+  await req('POST',`/microphones/${mic.id}/approve-test`,{},'admin');await req('POST','/microphones/me/test-result',{result:'ready'},'guest');await req('POST',`/microphones/${mic.id}/approve-live`,{},'admin');
+  const participant=(await req('POST','/rtc/participants/join',{},'guest')).data.session;
+  const listener=(await req('POST','/rtc/listeners/join',{})).data.session;
+  const cohost=(await req('POST','/rtc/cohosts/join',{},'loc')).data.session;assert.equal(cohost.broadcastId,live.broadcastId);
+  await req('GET','/rtc/host/poll',undefined,'loc',403);
+  const joins=(await req('GET','/rtc/host/poll',undefined,'dev')).data.joins;assert.equal(joins.length,3);assert.ok(!JSON.stringify(joins).includes('tokenHash'));
+  await req('POST','/rtc/host/signal',{targetId:listener.connectionId,signal:{type:'description',payload:{type:'offer',sdp:'test'}}},'dev');
+  const signals=(await req('POST','/rtc/clients/poll',listener)).data.signals;assert.equal(signals[0].payload.type,'offer');
+  await req('POST','/rtc/clients/poll',{...listener,token:'invalid'},null,403);
+  await req('POST','/rtc/clients/signal',{...participant,signal:{type:'candidate',payload:{candidate:'test'}}});
+  assert.equal((await req('GET','/rtc/host/poll',undefined,'dev')).data.signals.length,1);
+  await req('POST',`/microphones/${mic.id}/revoke`,{},'admin');await req('POST','/rtc/clients/poll',participant,null,403);
+  await req('POST','/users/locutor1/password',{newPassword:password+'Y'},'admin');
+  await req('POST','/rtc/clients/poll',cohost,null,403);
+  await req('POST','/login',{username:'locutor1',password:password+'Y'},'loc');
+  await req('POST','/live/end',{},'loc',403);await req('POST','/live/end',{},'admin');await req('POST','/rtc/clients/poll',listener,null,409);
+  const programming=(await req('GET','/programming',undefined,'loc')).data;
+  await req('PUT','/programming',programming,'loc',403);
+  const fractional=structuredClone(programming);fractional.continuity.stationIdEveryTracks=0.5;await req('PUT','/programming',fractional,'admin',400);
+  const overlap=structuredClone(programming);overlap.schedule.push({...overlap.schedule[0],id:'overlap'});await req('PUT','/programming',overlap,'admin',400);
+  const night=structuredClone(programming);night.schedule=[{id:'night',name:'Noche',days:[1],start:'23:00',end:'01:00',playlistId:programming.playlists[0].id,enabled:true},{id:'morning',name:'Madrugada',days:[2],start:'01:00',end:'02:00',playlistId:programming.playlists[0].id,enabled:true}];await req('PUT','/programming',night,'admin');night.schedule[1].start='00:30';await req('PUT','/programming',night,'admin',400);await req('POST','/programming/reset',{},'admin');
+  const catalog=(await req('GET','/media',undefined,'loc')).data.items;assert.equal(catalog.length,7);
+  await req('PATCH','/media/demo-indie',{category:'autodj.sayco',rightsConfirmed:false},'admin',403);
+  await req('PATCH','/media/demo-indie',{active:false},'admin');await req('PATCH','/media/demo-indie',{active:true},'admin');
+  const now=(await req('GET','/public/on-air')).data.autodj;assert.ok(now.item&&now.playoutKey);assert.ok(!('rights' in now.item));
+  await req('POST','/public/playback',{playoutKey:now.playoutKey});await req('POST','/public/playback',{playoutKey:now.playoutKey});
+  const report=(await req('GET','/reports/playback',undefined,'loc')).data;assert.equal(report.totals.plays,1);await req('GET','/reports/playback.csv',undefined,'loc');
+  const form=new FormData();form.set('metadata',JSON.stringify({title:'Prueba propia',category:'autodj.libre',contentType:'audio/mpeg',durationSeconds:18,licenseType:'produccion-propia',rightsConfirmed:true}));form.set('file',new Blob([fs.readFileSync(path.join(root,'public/media/indie-demo.mp3'))],{type:'audio/mpeg'}),'prueba.mp3');
+  const upload=await fetch(base+'/api.php?route=/media/local-upload',{method:'POST',headers:{Cookie:cookies.dev,Origin:base},body:form});const uploaded=await upload.json();assert.equal(upload.status,200,JSON.stringify(uploaded));assert.ok(uploaded.item.storageKey);count++;
+  const media=await fetch(base+'/'+uploaded.item.url,{headers:{Range:'bytes=0-9'}});assert.equal(media.status,206);assert.equal((await media.arrayBuffer()).byteLength,10);
+  const invalid=await fetch(base+'/'+uploaded.item.url,{headers:{Range:'bytes=999999999-'}});assert.equal(invalid.status,416);
+  const hidden=await fetch(base+'/private/objects/'+uploaded.item.storageKey+'.php');assert.equal(hidden.status,404);assert.equal(await hidden.text(),'');
+  const licenseForm=new FormData();licenseForm.set('licenseFile',new Blob(['Autorización de prueba'],{type:'text/plain'}),'licencia.txt');
+  const licenseResponse=await fetch(base+'/api.php?route=/media/'+uploaded.item.id+'/license-upload',{method:'POST',headers:{Cookie:cookies.dev,Origin:base},body:licenseForm});
+  const licensed=await licenseResponse.json();assert.equal(licenseResponse.status,200);count++;
+  const licenseUrl=base+'/'+licensed.item.rights.document.url;
+  const deniedLicense=await fetch(licenseUrl);assert.equal(deniedLicense.status,401);await deniedLicense.text();count++;
+  const allowedLicense=await fetch(licenseUrl,{headers:{Cookie:cookies.dev}});assert.equal(allowedLicense.status,200);assert.match(allowedLicense.headers.get('content-disposition'),/attachment/);assert.equal(await allowedLicense.text(),'Autorización de prueba');count++;
+  const fake=new FormData();fake.set('metadata',form.get('metadata'));fake.set('file',new Blob(['<?php echo "invalid"; ?>'],{type:'audio/mpeg'}),'falso.mp3');
+  const deniedUpload=await fetch(base+'/api.php?route=/media/local-upload',{method:'POST',headers:{Cookie:cookies.dev,Origin:base},body:fake});assert.equal(deniedUpload.status,400);await deniedUpload.text();count++;
+  await req('PATCH','/media/'+uploaded.item.id,{title:'Título corregido'},'admin');await req('DELETE','/media/'+uploaded.item.id,undefined,'admin');
+  assert.equal((await fetch(base+'/'+uploaded.item.url)).status,404);
+  for(const file of ['private/config.php','private/state.php','private/state.bak.php','core/auth.php','core/panel.php']){const r=await fetch(base+'/'+file);assert.equal(r.status,404,file);assert.equal(await r.text(),'');}
+  const statePath=path.join(temp,'private/state.php');const original=fs.readFileSync(statePath);assert.ok(!original.includes(Buffer.from(password)));assert.ok(original.includes(Buffer.from('$7$')));
+  fs.copyFileSync(statePath,path.join(temp,'private/state.bak.php'));fs.writeFileSync(statePath,'corrupted');await req('GET','/me',undefined,'dev');
+  assert.ok(fs.readFileSync(statePath,'utf8').startsWith('<?php'));
+  await Promise.all(Array.from({length:4},()=>new Promise((resolve,reject)=>{const worker=spawn('php',[...phpArgs,path.join(root,'tests/fixtures/stackcp-worker.php'),temp],{stdio:'pipe'});worker.on('error',reject);worker.on('exit',code=>code===0?resolve():reject(Error('Falló la prueba concurrente')));} )));
+  const concurrent=JSON.parse(fs.readFileSync(statePath,'utf8').split('\n').slice(1).join('\n'));assert.equal(concurrent.testCounter,40);
+  for(let i=0;i<11;i++)await req('POST','/login',{username:'none',password:'incorrect'},null,i===10?429:401);
+  await req('POST','/logout',{},'dev');await req('GET','/me',undefined,'dev',401);
+  assert.doesNotMatch(logs,/PHP (Fatal error|Warning|Deprecated)/);
+  console.log(`StackCP: ${count} operaciones HTTP verificadas, protección de datos, cargas reales, rangos, sesiones, roles, programación y señalización.`);
+ }catch(e){console.error(logs.slice(-4000));throw e;}finally{server.kill();}
+})().catch(e=>{console.error(e);process.exitCode=1});
