@@ -63,6 +63,9 @@ if ($remoteState -contains 'CONFIG_NEEDED') {
 $localFiles = Get-ChildItem -LiteralPath $artifact | Where-Object { $_.Name -ne 'index.php' } | ForEach-Object { $_.FullName }
 scp @sshOptions -r @localFiles "${sshTarget}:/home/sites/42b/e/e52161a3c2/public_html/radio/"
 if ($LASTEXITCODE -ne 0) { throw 'Transferencia incompleta; verificar archivos antes de continuar.' }
+$permissions = $guard + "`nchmod 755 `"`$target`" `"`$target/css`" `"`$target/js`" `"`$target/media`"`nfind `"`$target/css`" `"`$target/js`" `"`$target/media`" -type f -exec chmod 644 {} +`nchmod 644 `"`$target/login.css`" `"`$target/login.js`"`nchmod 700 `"`$target/core`" `"`$target/private`"`n"
+$permissions | ssh @sshOptions $sshTarget "tr -d '\r' | bash -e -s"
+if ($LASTEXITCODE -ne 0) { throw 'No se pudieron aplicar permisos seguros a los recursos públicos.' }
 $checks = foreach ($file in $expectedFiles | Where-Object { $_ -ne 'index.php' }) {
     $hash = (Get-FileHash (Join-Path $artifact $file) -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $file"

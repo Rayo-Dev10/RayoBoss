@@ -7,6 +7,7 @@
 Cobertura:
 
 - sintaxis de todos los archivos PHP y JavaScript del artefacto;
+- respuesta anónima limitada al ingreso, sin marcado interno del panel, y entrega del panel después de autenticar;
 - login scrypt, cookies protegidas, consultas de identidad y cierre de sesión;
 - permisos de usuarios, protección de dev, cambio de contraseña y revocación;
 - rechazo cross-origin, nombres inválidos e intentos excesivos;

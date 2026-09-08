@@ -26,11 +26,12 @@ const phpArgs=process.platform==='win32'?['-d','extension=sodium','-d','extensio
  async function req(method,route,body,user,expected=200){const headers={Origin:base};if(user&&cookies[user])headers.Cookie=cookies[user];if(body!==undefined)headers['Content-Type']='application/json';const res=await fetch(base+'/api.php?route='+route,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});const text=await res.text();assert.equal(res.status,expected,`${method} ${route}: ${text}`);count++;let data;try{data=JSON.parse(text)}catch{data=text}if(user&&res.headers.get('set-cookie'))cookies[user]=res.headers.get('set-cookie').split(';')[0];return {data,res,text};}
  try{
   for(let i=0;i<60;i++){try{const ready=await fetch(base);await ready.text();if(ready.ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
-  const page=await fetch(base);assert.equal(page.status,200);assert.match(await page.text(),/id="btnLogin"/);assert.equal(page.headers.get('x-frame-options'),'DENY');
+  const page=await fetch(base);assert.equal(page.status,200);const anonymousHtml=await page.text();assert.match(anonymousHtml,/id="loginForm"/);assert.doesNotMatch(anonymousHtml,/id="t-admin"/);assert.match(anonymousHtml,/\/login\.css/);assert.match(anonymousHtml,/\/login\.js/);assert.equal(page.headers.get('x-frame-options'),'DENY');count++;
   const embed=await fetch(base+'/embed.php');await embed.text();assert.equal(embed.status,200);assert.equal(embed.headers.get('x-frame-options'),null);assert.match(embed.headers.get('content-security-policy'),/frame-ancestors \*/);
   await req('GET','/health');await req('GET','/users',undefined,null,401);
   await req('POST','/login',{username:'dev',password:'wrong'},null,401);
   const login=await req('POST','/login',{username:'dev',password},'dev');assert.equal(login.data.user.role,'desarrollador');assert.match(login.res.headers.get('set-cookie'),/HttpOnly/i);assert.match(login.res.headers.get('set-cookie'),/SameSite=Strict/i);
+  const authenticatedPage=await fetch(base,{headers:{Cookie:cookies.dev}});const authenticatedHtml=await authenticatedPage.text();assert.equal(authenticatedPage.status,200);assert.match(authenticatedHtml,/id="t-admin"/);assert.match(authenticatedHtml,/\/css\/app\.css/);count++;
   await req('GET','/me',undefined,'dev');
   const cross=await fetch(base+'/api.php?route=/users',{method:'POST',headers:{Cookie:cookies.dev,Origin:'https://other.example','Content-Type':'application/json'},body:'{}'});assert.equal(cross.status,403);
   await req('POST','/users',{username:'admin1',role:'administrador',password},'dev');await req('POST','/login',{username:'admin1',password},'admin');

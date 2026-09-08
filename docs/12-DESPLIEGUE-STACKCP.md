@@ -10,6 +10,8 @@ El directorio exclusivo es `~/public_html/radio/`, resuelto como `/home/sites/42
 
 La raíz presenta el ingreso institucional. La cuenta inicial es `dev` y utiliza la contraseña `RAYOBOSS_DEV_PASSWORD` del `.env` local empleado al aprovisionar. La contraseña nunca se publica en Git ni se copia en texto plano al hosting.
 
+Antes de autenticar, PHP entrega únicamente la pantalla de ingreso; el marcado del panel administrativo no forma parte de la respuesta anónima. Después de validar la sesión, `index.php` habilita el panel y sus recursos públicos. El despliegue aplica permisos legibles a CSS, JavaScript y medios, mientras conserva `core/` y `private/` restringidos.
+
 Las secciones usan enlaces como `/index.php?section=biblioteca` y `/index.php?section=programacion`. La API usa `/api.php?route=/media`. El reproductor público es `/embed.php?autoplay=1`. No se requieren rewrites.
 
 El estudio conserva cámara, pantalla, micrófonos remotos, coanfitriones, efectos, cama y ducking. El navegador puede pedir permisos para dispositivos y una pulsación para reproducir sonido. Mantener abierto el estudio conductor durante el vivo.
