@@ -1,6 +1,8 @@
 'use strict';
 const form = document.getElementById('loginForm');
 const message = document.getElementById('message');
+const username = document.getElementById('username');
+const password = document.getElementById('password');
 form.addEventListener('submit', async event => {
   event.preventDefault();
   const button = form.querySelector('button');
@@ -10,7 +12,7 @@ form.addEventListener('submit', async event => {
     const response = await fetch('/api.php?route=/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: form.username.value, password: form.password.value })
+      body: JSON.stringify({ username: username.value, password: password.value })
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'No fue posible ingresar.');
@@ -18,7 +20,7 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     message.textContent = error.message || 'No fue posible ingresar.';
     button.disabled = false;
-    form.password.focus();
-    form.password.select();
+    password.focus();
+    password.select();
   }
 });

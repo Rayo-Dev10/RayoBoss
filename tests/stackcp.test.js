@@ -27,6 +27,7 @@ const phpArgs=process.platform==='win32'?['-d','extension=sodium','-d','extensio
  try{
   for(let i=0;i<60;i++){try{const ready=await fetch(base);await ready.text();if(ready.ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
   const page=await fetch(base);assert.equal(page.status,200);const anonymousHtml=await page.text();assert.match(anonymousHtml,/id="loginForm"/);assert.doesNotMatch(anonymousHtml,/id="t-admin"/);assert.match(anonymousHtml,/\/login\.css/);assert.match(anonymousHtml,/\/login\.js/);assert.equal(page.headers.get('x-frame-options'),'DENY');count++;
+  const loginClient=fs.readFileSync(path.join(temp,'login.js'),'utf8');assert.match(loginClient,/getElementById\('username'\)/);assert.match(loginClient,/getElementById\('password'\)/);assert.doesNotMatch(loginClient,/form\.(username|password)/);count++;
   const embed=await fetch(base+'/embed.php');await embed.text();assert.equal(embed.status,200);assert.equal(embed.headers.get('x-frame-options'),null);assert.match(embed.headers.get('content-security-policy'),/frame-ancestors \*/);
   await req('GET','/health');await req('GET','/users',undefined,null,401);
   await req('POST','/login',{username:'dev',password:'wrong'},null,401);
