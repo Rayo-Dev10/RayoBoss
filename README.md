@@ -2,6 +2,8 @@
 
 RayoBoss es una plataforma de control para una emisora universitaria multimedia. Integra autenticación por roles, solicitudes de invitados, permisos de micrófono, estudio WebRTC colaborativo, captura de cámara o pantalla, biblioteca audiovisual con metadatos MusicBrainz/Picard y licencias, carga masiva, AutoDJ programable mediante interfaz visual, informe mensual de reproducción, continuidad radial, reproductor público embebible y almacenamiento intercambiable.
 
+Autor: **Rayo Palatianos** ([rayo.palatianos@gmail.com](mailto:rayo.palatianos@gmail.com)). El código de RayoBoss se distribuye bajo la [licencia MIT](LICENSE).
+
 ## Hosting compartido StackCP
 
 El destino PHP funciona en https://radio.rayogestion.com/ con PHP 7.4 FPM, Sodium y Fileinfo. Incluye inicio de sesión, roles, invitados, micrófonos, estudio WebRTC, biblioteca con cargas locales y soportes jurídicos, MusicBrainz/Picard, programación visual, reproductor e informes. No necesita Node.js, Composer ni MySQL en producción.
